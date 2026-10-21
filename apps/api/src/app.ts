@@ -1,10 +1,12 @@
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 
 import type { ApiConfig } from './config.js';
 import { AppError, createErrorResponse } from './errors.js';
+import { INGESTION_LIMITS } from './modules/ingestion/limits.js';
 import { registerHealthRoutes } from './routes/health.js';
 
 export interface BuildAppOptions {
@@ -127,6 +129,12 @@ export async function buildApp(options: BuildAppOptions) {
 
     trustProxy: options.config.trustProxy,
 
+    /*
+     * Normal JSON requests remain limited to 1 MiB.
+     *
+     * Multipart uploads have their own separate
+     * 50 MiB limit below.
+     */
     bodyLimit: 1_048_576,
 
     requestTimeout: 30_000,
@@ -134,13 +142,63 @@ export async function buildApp(options: BuildAppOptions) {
 
   await app.register(cors, {
     origin: options.config.corsOrigins,
+
     credentials: false,
+  });
+
+  /*
+   * Repository ZIP upload support.
+   *
+   * This only enables multipart parsing.
+   * We are NOT performing repository analysis
+   * inside Fastify request handlers.
+   */
+  await app.register(multipart, {
+    limits: {
+      /*
+       * One repository ZIP per request.
+       */
+      files: 1,
+
+      /*
+       * ZIP upload endpoint currently needs
+       * no normal multipart text fields.
+       */
+      fields: 0,
+
+      /*
+       * One total multipart part:
+       * the repository file.
+       */
+      parts: 1,
+
+      /*
+       * Maximum compressed ZIP size:
+       * currently 50 MiB.
+       */
+      fileSize: INGESTION_LIMITS.maxArchiveBytes,
+    },
+
+    /*
+     * Instead of immediately throwing when
+     * Fastify reaches the size limit, the
+     * uploaded stream is marked:
+     *
+     * file.file.truncated = true
+     *
+     * stageZipUpload() converts that into our
+     * standardized AppError response.
+     */
+    throwFileSizeLimit: false,
   });
 
   await app.register(rateLimit, {
     global: true,
+
     max: options.config.rateLimitMax,
+
     timeWindow: '1 minute',
+
     ipv6Subnet: 64,
   });
 
