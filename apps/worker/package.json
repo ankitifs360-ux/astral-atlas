@@ -1,0 +1,9 @@
+{
+  "name": "@astral-atlas/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.23.3 <23"
+  }
+}
