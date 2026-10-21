@@ -32,6 +32,12 @@ export const envSchema = z.object({
   API_PORT: portSchema,
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']),
+
+  CORS_ORIGINS: z.string().min(1),
+
+  RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(10_000),
+
+  TRUST_PROXY: z.enum(['true', 'false']),
 });
 
 export type Environment = z.infer<typeof envSchema>;

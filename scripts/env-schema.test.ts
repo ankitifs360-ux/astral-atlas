@@ -18,6 +18,10 @@ const validEnvironment: NodeJS.ProcessEnv = {
   API_PORT: '3000',
 
   LOG_LEVEL: 'info',
+
+  CORS_ORIGINS: 'http://localhost:5173',
+  RATE_LIMIT_MAX: '120',
+  TRUST_PROXY: 'false',
 };
 
 describe('validateEnv', () => {
@@ -27,6 +31,7 @@ describe('validateEnv', () => {
     expect(env.POSTGRES_PORT).toBe(5432);
     expect(env.REDIS_PORT).toBe(6379);
     expect(env.API_PORT).toBe(3000);
+    expect(env.RATE_LIMIT_MAX).toBe(120);
   });
 
   it('rejects an invalid PostgreSQL port', () => {
@@ -45,5 +50,14 @@ describe('validateEnv', () => {
         DATABASE_URL: 'https://example.com/database',
       }),
     ).toThrow('DATABASE_URL');
+  });
+
+  it('rejects an invalid rate limit', () => {
+    expect(() =>
+      validateEnv({
+        ...validEnvironment,
+        RATE_LIMIT_MAX: '0',
+      }),
+    ).toThrow('RATE_LIMIT_MAX');
   });
 });

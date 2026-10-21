@@ -3,7 +3,25 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
   "engines": {
     "node": ">=22.23.3 <23"
+  },
+  "dependencies": {
+    "@astral-atlas/database": "workspace:*",
+    "@fastify/cors": "11.3.1",
+    "@fastify/rate-limit": "11.2.1",
+    "@fastify/type-provider-typebox": "6.3.0",
+    "fastify": "5.12.7",
+    "typebox": "1.4.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
   }
 }

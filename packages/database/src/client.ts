@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
@@ -29,6 +30,10 @@ export function createDatabase(connectionString: string, options: DatabaseOption
   return {
     db,
     pool,
+
+    async ping(): Promise<void> {
+      await db.execute(sql`SELECT 1`);
+    },
 
     async close(): Promise<void> {
       await pool.end();
