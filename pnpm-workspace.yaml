@@ -5,3 +5,7 @@ packages:
 allowBuilds:
   esbuild: true
   msgpackr-extract: false
+  tree-sitter: false
+  tree-sitter-javascript: false
+  tree-sitter-python: false
+  tree-sitter-typescript: false
