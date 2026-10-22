@@ -8,6 +8,13 @@
       "when": 1792573647784,
       "tag": "0000_initial_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792699926304,
+      "tag": "0001_dapper_george_stacy",
+      "breakpoints": true
     }
   ]
 }

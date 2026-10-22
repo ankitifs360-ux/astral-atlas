@@ -263,6 +263,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@astral-atlas/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@astral-atlas/shared':
         specifier: workspace:*
         version: link:../../packages/shared

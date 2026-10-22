@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@astral-atlas/database": "workspace:*",
     "@astral-atlas/shared": "workspace:*",
     "bullmq": "6.3.10",
     "ioredis": "6.0.0",
