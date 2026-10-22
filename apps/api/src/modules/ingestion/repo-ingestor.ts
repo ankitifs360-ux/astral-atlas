@@ -5,8 +5,10 @@ import { AppError } from '../../errors.js';
 import type { GitHubClient, ResolvedGitHubRepository } from './github-client.js';
 import {
   checkoutGitHubCommit,
+  readGitHistoryFileTouches,
   type GitCheckoutInput,
   type GitCheckoutResult,
+  type GitHistoryFileTouch,
 } from './git-runner.js';
 import { parseGitHubRepositoryUrl } from './github-url.js';
 import { INGESTION_LIMITS } from './limits.js';
@@ -18,17 +20,29 @@ export interface PreparedGitHubRepository {
   sourceType: 'github';
 
   owner: string;
+
   repo: string;
 
   sourceKey: string;
+
   canonicalUrl: string;
 
   defaultBranch: string;
+
   commitSha: string;
 
   repositoryDirectory: string;
 
   scan: RepositoryScanResult;
+
+  /*
+   * Bounded Git history gathered from the local
+   * shallow checkout.
+   *
+   * These touches will later be converted into
+   * per-file churn metrics by the worker.
+   */
+  historyTouches: GitHistoryFileTouch[];
 
   cleanup: () => Promise<void>;
 }
@@ -39,8 +53,8 @@ export interface PreparedZipRepository {
   /*
    * SHA-256 of the uploaded ZIP bytes.
    *
-   * ZIP files do not have Git commit SHAs, so this becomes
-   * their deterministic revision identifier.
+   * ZIP files do not have Git commit SHAs, so this
+   * becomes their deterministic revision identifier.
    */
   contentSha256: string;
 
@@ -57,10 +71,21 @@ export type PreparedRepository = PreparedGitHubRepository | PreparedZipRepositor
 
 export type GitCheckoutFunction = (input: GitCheckoutInput) => Promise<GitCheckoutResult>;
 
+export type GitHistoryReaderFunction = (
+  repositoryDirectory: string,
+) => Promise<GitHistoryFileTouch[]>;
+
 export interface RepoIngestorDependencies {
   githubClient: GitHubClient;
 
   checkoutGitHubCommit?: GitCheckoutFunction;
+
+  /*
+   * Dependency injection keeps repository
+   * ingestion unit-testable without requiring
+   * real Git history in every test.
+   */
+  readGitHistoryFileTouches?: GitHistoryReaderFunction;
 }
 
 async function calculateFileSha256(filePath: string): Promise<string> {
@@ -86,10 +111,15 @@ export class RepoIngestor {
 
   private readonly checkoutGitHubCommit: GitCheckoutFunction;
 
+  private readonly readGitHistoryFileTouches: GitHistoryReaderFunction;
+
   public constructor(dependencies: RepoIngestorDependencies) {
     this.githubClient = dependencies.githubClient;
 
     this.checkoutGitHubCommit = dependencies.checkoutGitHubCommit ?? checkoutGitHubCommit;
+
+    this.readGitHistoryFileTouches =
+      dependencies.readGitHistoryFileTouches ?? readGitHistoryFileTouches;
   }
 
   public async prepareGitHubRepository(repositoryUrl: string): Promise<PreparedGitHubRepository> {
@@ -112,9 +142,22 @@ export class RepoIngestor {
         destinationDirectory: workspace.repositoryDir,
       });
 
+      /*
+       * Read only the history already available in
+       * the bounded local checkout.
+       *
+       * No second clone or network request occurs.
+       */
+      const historyTouches = await this.readGitHistoryFileTouches(workspace.repositoryDir);
+
       const scan = await scanRepositorySourceFiles(workspace.repositoryDir);
 
-      return this.createPreparedGitHubRepository(resolvedRepository, workspace, scan);
+      return this.createPreparedGitHubRepository(
+        resolvedRepository,
+        workspace,
+        scan,
+        historyTouches,
+      );
     } catch (error: unknown) {
       await workspace.cleanup();
 
@@ -127,7 +170,8 @@ export class RepoIngestor {
 
     try {
       /*
-       * extractZipArchive performs the important safety checks:
+       * extractZipArchive performs the important
+       * safety checks:
        *
        * - archive size
        * - ZIP-slip/path traversal
@@ -175,6 +219,7 @@ export class RepoIngestor {
         [
           {
             field: 'repositoryUrl',
+
             message: 'Repository is too large to analyse safely.',
           },
         ],
@@ -188,6 +233,8 @@ export class RepoIngestor {
     workspace: TempWorkspace,
 
     scan: RepositoryScanResult,
+
+    historyTouches: GitHistoryFileTouch[],
   ): PreparedGitHubRepository {
     return {
       sourceType: 'github',
@@ -207,6 +254,8 @@ export class RepoIngestor {
       repositoryDirectory: workspace.repositoryDir,
 
       scan,
+
+      historyTouches,
 
       cleanup: workspace.cleanup,
     };

@@ -9,7 +9,11 @@ import { ZipFile } from 'yazl';
 
 import type { GitHubClient, ResolvedGitHubRepository } from './github-client.js';
 
-import { RepoIngestor, type GitCheckoutFunction } from './repo-ingestor.js';
+import {
+  RepoIngestor,
+  type GitCheckoutFunction,
+  type GitHistoryReaderFunction,
+} from './repo-ingestor.js';
 
 import { withTempWorkspace } from './temp-workspace.js';
 
@@ -28,6 +32,7 @@ function createResolvedRepository(
 ): ResolvedGitHubRepository {
   return {
     owner: 'facebook',
+
     repo: 'react',
 
     canonicalUrl: 'https://github.com/facebook/react',
@@ -50,6 +55,10 @@ function createFakeGitHubClient(resolvedRepository = createResolvedRepository())
   return {
     resolveRepository: vi.fn(async () => resolvedRepository),
   } as unknown as GitHubClient;
+}
+
+function createEmptyHistoryReader(): GitHistoryReaderFunction {
+  return vi.fn(async () => []);
 }
 
 async function createZipArchive(archivePath: string): Promise<void> {
@@ -78,7 +87,7 @@ async function calculateSha256(filePath: string): Promise<string> {
 
 describe('RepoIngestor', () => {
   describe('GitHub ingestion', () => {
-    it('prepares a GitHub repository and scans supported files', async () => {
+    it('prepares a GitHub repository, reads history, and scans supported files', async () => {
       const resolvedRepository = createResolvedRepository();
 
       const resolveRepository = vi.fn(async () => resolvedRepository);
@@ -107,10 +116,34 @@ describe('RepoIngestor', () => {
         };
       });
 
+      const historyTouches = [
+        {
+          commitSha: 'a'.repeat(40),
+
+          filePath: 'src/app.ts',
+        },
+
+        {
+          commitSha: 'b'.repeat(40),
+
+          filePath: 'src/app.ts',
+        },
+
+        {
+          commitSha: 'a'.repeat(40),
+
+          filePath: 'src/helper.js',
+        },
+      ];
+
+      const historyReaderMock: GitHistoryReaderFunction = vi.fn(async () => historyTouches);
+
       const ingestor = new RepoIngestor({
         githubClient: fakeGitHubClient,
 
         checkoutGitHubCommit: checkoutMock,
+
+        readGitHistoryFileTouches: historyReaderMock,
       });
 
       const prepared = await ingestor.prepareGitHubRepository('https://github.com/facebook/react');
@@ -120,10 +153,15 @@ describe('RepoIngestor', () => {
 
         expect(checkoutMock).toHaveBeenCalledTimes(1);
 
+        expect(historyReaderMock).toHaveBeenCalledTimes(1);
+
+        expect(historyReaderMock).toHaveBeenCalledWith(prepared.repositoryDirectory);
+
         expect(prepared).toMatchObject({
           sourceType: 'github',
 
           owner: 'facebook',
+
           repo: 'react',
 
           sourceKey: 'github:facebook/react',
@@ -135,6 +173,8 @@ describe('RepoIngestor', () => {
           commitSha: 'a'.repeat(40),
         });
 
+        expect(prepared.historyTouches).toEqual(historyTouches);
+
         expect(
           prepared.scan.sourceFiles.map((file) => ({
             path: file.relativePath,
@@ -144,10 +184,13 @@ describe('RepoIngestor', () => {
         ).toEqual([
           {
             path: 'src/app.ts',
+
             language: 'typescript',
           },
+
           {
             path: 'src/helper.js',
+
             language: 'javascript',
           },
         ]);
@@ -171,15 +214,65 @@ describe('RepoIngestor', () => {
         throw new Error('Simulated checkout failure');
       });
 
+      const historyReaderMock = createEmptyHistoryReader();
+
       const ingestor = new RepoIngestor({
         githubClient: fakeGitHubClient,
 
         checkoutGitHubCommit: checkoutMock,
+
+        readGitHistoryFileTouches: historyReaderMock,
       });
 
       await expect(
         ingestor.prepareGitHubRepository('https://github.com/facebook/react'),
       ).rejects.toThrow('Simulated checkout failure');
+
+      expect(historyReaderMock).not.toHaveBeenCalled();
+
+      expect(destinationDirectory.length).toBeGreaterThan(0);
+
+      expect(await pathExists(destinationDirectory)).toBe(false);
+    });
+
+    it('cleans up the temporary workspace when Git history reading fails', async () => {
+      const fakeGitHubClient = createFakeGitHubClient();
+
+      let destinationDirectory = '';
+
+      const checkoutMock: GitCheckoutFunction = vi.fn(async (input) => {
+        destinationDirectory = input.destinationDirectory;
+
+        await mkdir(join(destinationDirectory, 'src'), {
+          recursive: true,
+        });
+
+        return {
+          commitSha: input.commitSha,
+
+          remoteUrl: 'https://github.com/facebook/react.git',
+        };
+      });
+
+      const historyReaderMock: GitHistoryReaderFunction = vi.fn(async () => {
+        throw new Error('Simulated history failure');
+      });
+
+      const ingestor = new RepoIngestor({
+        githubClient: fakeGitHubClient,
+
+        checkoutGitHubCommit: checkoutMock,
+
+        readGitHistoryFileTouches: historyReaderMock,
+      });
+
+      await expect(
+        ingestor.prepareGitHubRepository('https://github.com/facebook/react'),
+      ).rejects.toThrow('Simulated history failure');
+
+      expect(checkoutMock).toHaveBeenCalledTimes(1);
+
+      expect(historyReaderMock).toHaveBeenCalledTimes(1);
 
       expect(destinationDirectory.length).toBeGreaterThan(0);
 
@@ -195,10 +288,14 @@ describe('RepoIngestor', () => {
 
       const checkoutMock: GitCheckoutFunction = vi.fn();
 
+      const historyReaderMock = createEmptyHistoryReader();
+
       const ingestor = new RepoIngestor({
         githubClient: fakeGitHubClient,
 
         checkoutGitHubCommit: checkoutMock,
+
+        readGitHistoryFileTouches: historyReaderMock,
       });
 
       await expect(
@@ -210,6 +307,8 @@ describe('RepoIngestor', () => {
       });
 
       expect(checkoutMock).not.toHaveBeenCalled();
+
+      expect(historyReaderMock).not.toHaveBeenCalled();
     });
 
     it('rejects an invalid GitHub URL before calling GitHub', async () => {
@@ -221,22 +320,29 @@ describe('RepoIngestor', () => {
 
       const checkoutMock: GitCheckoutFunction = vi.fn();
 
+      const historyReaderMock = createEmptyHistoryReader();
+
       const ingestor = new RepoIngestor({
         githubClient: fakeGitHubClient,
 
         checkoutGitHubCommit: checkoutMock,
+
+        readGitHistoryFileTouches: historyReaderMock,
       });
 
       await expect(
         ingestor.prepareGitHubRepository('https://example.com/not/github'),
       ).rejects.toMatchObject({
         code: 'BAD_REQUEST',
+
         statusCode: 400,
       });
 
       expect(resolveRepository).not.toHaveBeenCalled();
 
       expect(checkoutMock).not.toHaveBeenCalled();
+
+      expect(historyReaderMock).not.toHaveBeenCalled();
     });
   });
 
@@ -268,11 +374,13 @@ describe('RepoIngestor', () => {
 
               language: 'python',
             },
+
             {
               path: 'src/app.ts',
 
               language: 'typescript',
             },
+
             {
               path: 'src/helper.js',
 
@@ -283,6 +391,12 @@ describe('RepoIngestor', () => {
           expect(prepared.scan.totalFileCount).toBe(4);
 
           expect(prepared.scan.skipped.unsupported).toBe(1);
+
+          /*
+           * ZIP uploads intentionally do
+           * not claim Git history exists.
+           */
+          expect('historyTouches' in prepared).toBe(false);
 
           expect(await pathExists(prepared.repositoryDirectory)).toBe(true);
         } finally {
@@ -357,6 +471,7 @@ describe('RepoIngestor', () => {
 
         await expect(ingestor.prepareZipRepository(archivePath)).rejects.toMatchObject({
           code: 'BAD_REQUEST',
+
           statusCode: 400,
         });
       });
