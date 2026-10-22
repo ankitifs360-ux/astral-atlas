@@ -6,13 +6,30 @@ import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 
 import type { ApiConfig } from './config.js';
 import { AppError, createErrorResponse } from './errors.js';
+
 import { INGESTION_LIMITS } from './modules/ingestion/limits.js';
-import { registerHealthRoutes } from './routes/health.js';
+
+import type { AnalysisEventHub } from './queues/analysis-event-hub.js';
+
+import { registerAnalysisEventsRoute } from './routes/analysis-events.js';
+
+import { registerHealthRoutes, type ReadinessProbe } from './routes/health.js';
 
 export interface BuildAppOptions {
   config: ApiConfig;
-  readinessProbe: () => Promise<void>;
+
+  readinessProbe: ReadinessProbe;
+
+  /*
+   * The same AnalysisEventHub instance that
+   * receives BullMQ QueueEvents in server.ts.
+   *
+   * The SSE route subscribes to this instance.
+   */
+  analysisEventHub: AnalysisEventHub;
+
   closeResources?: () => Promise<void>;
+
   logger?: boolean;
 }
 
@@ -130,10 +147,11 @@ export async function buildApp(options: BuildAppOptions) {
     trustProxy: options.config.trustProxy,
 
     /*
-     * Normal JSON requests remain limited to 1 MiB.
+     * Normal JSON requests remain limited
+     * to 1 MiB.
      *
-     * Multipart uploads have their own separate
-     * 50 MiB limit below.
+     * Multipart repository uploads use their
+     * own independent limit below.
      */
     bodyLimit: 1_048_576,
 
@@ -149,9 +167,10 @@ export async function buildApp(options: BuildAppOptions) {
   /*
    * Repository ZIP upload support.
    *
-   * This only enables multipart parsing.
-   * We are NOT performing repository analysis
-   * inside Fastify request handlers.
+   * This enables multipart parsing only.
+   *
+   * Actual repository analysis must never be
+   * performed inside the HTTP request handler.
    */
   await app.register(multipart, {
     limits: {
@@ -161,33 +180,30 @@ export async function buildApp(options: BuildAppOptions) {
       files: 1,
 
       /*
-       * ZIP upload endpoint currently needs
-       * no normal multipart text fields.
+       * No normal multipart text fields are
+       * currently required.
        */
       fields: 0,
 
       /*
        * One total multipart part:
-       * the repository file.
+       * the repository ZIP.
        */
       parts: 1,
 
       /*
-       * Maximum compressed ZIP size:
-       * currently 50 MiB.
+       * Maximum compressed archive size.
        */
       fileSize: INGESTION_LIMITS.maxArchiveBytes,
     },
 
     /*
      * Instead of immediately throwing when
-     * Fastify reaches the size limit, the
-     * uploaded stream is marked:
+     * Fastify reaches the file-size limit,
+     * the stream is marked as truncated.
      *
-     * file.file.truncated = true
-     *
-     * stageZipUpload() converts that into our
-     * standardized AppError response.
+     * stageZipUpload() later converts this
+     * into our standardized AppError.
      */
     throwFileSizeLimit: false,
   });
@@ -204,7 +220,22 @@ export async function buildApp(options: BuildAppOptions) {
 
   registerErrorHandlers(app);
 
+  /*
+   * Basic operational endpoints.
+   */
   await registerHealthRoutes(app, options.readinessProbe);
+
+  /*
+   * Long-lived Server-Sent Events endpoint:
+   *
+   * GET
+   * /api/analyses/:analysisId/events
+   *
+   * This receives events from the SAME
+   * AnalysisEventHub instance connected to
+   * BullMQ QueueEvents in server.ts.
+   */
+  registerAnalysisEventsRoute(app, options.analysisEventHub);
 
   if (options.closeResources) {
     app.addHook('onClose', async () => {

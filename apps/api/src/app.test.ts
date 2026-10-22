@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import type { ApiConfig } from './config.js';
 
+import { AnalysisEventHub } from './queues/analysis-event-hub.js';
+
 function createTestConfig(overrides: Partial<ApiConfig> = {}): ApiConfig {
   return {
     nodeEnv: 'test',
@@ -11,13 +13,26 @@ function createTestConfig(overrides: Partial<ApiConfig> = {}): ApiConfig {
     databaseUrl: 'postgresql://test:test@127.0.0.1:5432/test',
 
     host: '127.0.0.1',
+
     port: 3000,
+
     logLevel: 'silent',
 
     corsOrigins: ['http://localhost:5173'],
 
     rateLimitMax: 1_000,
+
     trustProxy: false,
+
+    redis: {
+      host: '127.0.0.1',
+
+      port: 6379,
+
+      database: 0,
+
+      useTls: false,
+    },
 
     ...overrides,
   };
@@ -27,13 +42,22 @@ describe('Fastify API', () => {
   it('returns liveness health', async () => {
     const app = await buildApp({
       config: createTestConfig(),
-      readinessProbe: async () => undefined,
+
+      analysisEventHub: new AnalysisEventHub(),
+
+      readinessProbe: async () => ({
+        database: 'up',
+
+        redis: 'up',
+      }),
+
       logger: false,
     });
 
     try {
       const response = await app.inject({
         method: 'GET',
+
         url: '/health',
       });
 
@@ -50,13 +74,22 @@ describe('Fastify API', () => {
   it('reports ready when dependencies are healthy', async () => {
     const app = await buildApp({
       config: createTestConfig(),
-      readinessProbe: async () => undefined,
+
+      analysisEventHub: new AnalysisEventHub(),
+
+      readinessProbe: async () => ({
+        database: 'up',
+
+        redis: 'up',
+      }),
+
       logger: false,
     });
 
     try {
       const response = await app.inject({
         method: 'GET',
+
         url: '/ready',
       });
 
@@ -67,6 +100,8 @@ describe('Fastify API', () => {
 
         checks: {
           database: 'up',
+
+          redis: 'up',
         },
       });
     } finally {
@@ -74,12 +109,14 @@ describe('Fastify API', () => {
     }
   });
 
-  it('reports not ready when PostgreSQL is unavailable', async () => {
+  it('reports not ready when dependencies are unavailable', async () => {
     const app = await buildApp({
       config: createTestConfig(),
 
+      analysisEventHub: new AnalysisEventHub(),
+
       readinessProbe: async () => {
-        throw new Error('Database unavailable');
+        throw new Error('Dependencies unavailable');
       },
 
       logger: false,
@@ -88,6 +125,7 @@ describe('Fastify API', () => {
     try {
       const response = await app.inject({
         method: 'GET',
+
         url: '/ready',
       });
 
@@ -98,6 +136,8 @@ describe('Fastify API', () => {
 
         checks: {
           database: 'down',
+
+          redis: 'down',
         },
       });
     } finally {
@@ -108,7 +148,15 @@ describe('Fastify API', () => {
   it('returns standardized validation errors', async () => {
     const app = await buildApp({
       config: createTestConfig(),
-      readinessProbe: async () => undefined,
+
+      analysisEventHub: new AnalysisEventHub(),
+
+      readinessProbe: async () => ({
+        database: 'up',
+
+        redis: 'up',
+      }),
+
       logger: false,
     });
 
@@ -138,7 +186,9 @@ describe('Fastify API', () => {
     try {
       const response = await app.inject({
         method: 'POST',
+
         url: '/test/validation',
+
         payload: {},
       });
 
@@ -157,13 +207,22 @@ describe('Fastify API', () => {
   it('returns standardized 404 errors', async () => {
     const app = await buildApp({
       config: createTestConfig(),
-      readinessProbe: async () => undefined,
+
+      analysisEventHub: new AnalysisEventHub(),
+
+      readinessProbe: async () => ({
+        database: 'up',
+
+        redis: 'up',
+      }),
+
       logger: false,
     });
 
     try {
       const response = await app.inject({
         method: 'GET',
+
         url: '/this-route-does-not-exist',
       });
 
@@ -185,7 +244,14 @@ describe('Fastify API', () => {
         rateLimitMax: 2,
       }),
 
-      readinessProbe: async () => undefined,
+      analysisEventHub: new AnalysisEventHub(),
+
+      readinessProbe: async () => ({
+        database: 'up',
+
+        redis: 'up',
+      }),
+
       logger: false,
     });
 
@@ -198,21 +264,26 @@ describe('Fastify API', () => {
     try {
       const first = await app.inject({
         method: 'GET',
+
         url: '/test/rate-limit',
       });
 
       const second = await app.inject({
         method: 'GET',
+
         url: '/test/rate-limit',
       });
 
       const third = await app.inject({
         method: 'GET',
+
         url: '/test/rate-limit',
       });
 
       expect(first.statusCode).toBe(200);
+
       expect(second.statusCode).toBe(200);
+
       expect(third.statusCode).toBe(429);
 
       expect(third.json()).toMatchObject({

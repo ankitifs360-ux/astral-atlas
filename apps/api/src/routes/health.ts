@@ -1,63 +1,44 @@
+import { Type } from 'typebox';
 import type { FastifyInstance } from 'fastify';
-import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 
-const HealthResponseSchema = Type.Object(
-  {
-    status: Type.Literal('ok'),
-    timestamp: Type.String(),
-  },
-  {
-    additionalProperties: false,
-  },
-);
+export type DependencyStatus = 'up' | 'down';
 
-const ReadyResponseSchema = Type.Object(
-  {
-    status: Type.Literal('ready'),
+export interface ReadinessCheckResult {
+  database: DependencyStatus;
+  redis: DependencyStatus;
+}
 
-    checks: Type.Object(
-      {
-        database: Type.Literal('up'),
-      },
-      {
-        additionalProperties: false,
-      },
-    ),
+export type ReadinessProbe = () => Promise<ReadinessCheckResult>;
 
-    timestamp: Type.String(),
-  },
-  {
-    additionalProperties: false,
-  },
-);
+const DependencyStatusSchema = Type.Union([Type.Literal('up'), Type.Literal('down')]);
 
-const NotReadyResponseSchema = Type.Object(
-  {
-    status: Type.Literal('not_ready'),
+const HealthResponseSchema = Type.Object({
+  status: Type.Literal('ok'),
 
-    checks: Type.Object(
-      {
-        database: Type.Literal('down'),
-      },
-      {
-        additionalProperties: false,
-      },
-    ),
+  timestamp: Type.String({
+    format: 'date-time',
+  }),
+});
 
-    timestamp: Type.String(),
-  },
-  {
-    additionalProperties: false,
-  },
-);
+const ReadinessResponseSchema = Type.Object({
+  status: Type.Union([Type.Literal('ready'), Type.Literal('not_ready')]),
+
+  checks: Type.Object({
+    database: DependencyStatusSchema,
+
+    redis: DependencyStatusSchema,
+  }),
+
+  timestamp: Type.String({
+    format: 'date-time',
+  }),
+});
 
 export async function registerHealthRoutes(
   app: FastifyInstance,
-  readinessProbe: () => Promise<void>,
+  readinessProbe: ReadinessProbe,
 ): Promise<void> {
-  const typedApp = app.withTypeProvider<TypeBoxTypeProvider>();
-
-  typedApp.get(
+  app.get(
     '/health',
     {
       config: {
@@ -73,12 +54,13 @@ export async function registerHealthRoutes(
     async () => {
       return {
         status: 'ok' as const,
+
         timestamp: new Date().toISOString(),
       };
     },
   );
 
-  typedApp.get(
+  app.get(
     '/ready',
     {
       config: {
@@ -87,42 +69,43 @@ export async function registerHealthRoutes(
 
       schema: {
         response: {
-          200: ReadyResponseSchema,
-          503: NotReadyResponseSchema,
+          200: ReadinessResponseSchema,
+
+          503: ReadinessResponseSchema,
         },
       },
     },
-    async (request, reply) => {
+    async (_request, reply) => {
+      let checks: ReadinessCheckResult;
+
       try {
-        await readinessProbe();
-
-        return {
-          status: 'ready' as const,
-
-          checks: {
-            database: 'up' as const,
-          },
-
-          timestamp: new Date().toISOString(),
+        checks = await readinessProbe();
+      } catch {
+        /*
+         * Unexpected failure in the readiness
+         * implementation itself.
+         */
+        checks = {
+          database: 'down',
+          redis: 'down',
         };
-      } catch (error: unknown) {
-        request.log.warn(
-          {
-            err: error,
-          },
-          'Readiness probe failed',
-        );
-
-        return reply.status(503).send({
-          status: 'not_ready',
-
-          checks: {
-            database: 'down',
-          },
-
-          timestamp: new Date().toISOString(),
-        });
       }
+
+      const ready = checks.database === 'up' && checks.redis === 'up';
+
+      const response = {
+        status: ready ? ('ready' as const) : ('not_ready' as const),
+
+        checks,
+
+        timestamp: new Date().toISOString(),
+      };
+
+      if (!ready) {
+        return reply.status(503).send(response);
+      }
+
+      return reply.status(200).send(response);
     },
   );
 }

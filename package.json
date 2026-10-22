@@ -9,7 +9,7 @@
     "pnpm": "12.14.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm --filter @astral-atlas/database typecheck && pnpm --filter @astral-atlas/api typecheck",
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm --filter @astral-atlas/shared typecheck && pnpm --filter @astral-atlas/database typecheck && pnpm --filter @astral-atlas/api typecheck && pnpm --filter @astral-atlas/worker typecheck",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
