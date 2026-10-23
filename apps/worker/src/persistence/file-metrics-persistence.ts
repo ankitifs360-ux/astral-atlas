@@ -134,6 +134,11 @@ export async function persistFilesAndMetrics(
    * Insert all file records first because every
    * later persistence stage uses files.id as its
    * foreign-key identity.
+   *
+   * sourceContent is nullable for compatibility
+   * with older persisted analyses and unit-test
+   * fixtures. New B13 analysis jobs will provide
+   * the original UTF-8 source text.
    */
   const insertedFiles = await transaction
     .insert(files)
@@ -148,6 +153,8 @@ export async function persistFilesAndMetrics(
         sizeBytes: file.sizeBytes,
 
         contentHash: file.contentHash ?? null,
+
+        sourceContent: file.sourceContent ?? null,
 
         isSupported: file.isSupported ?? true,
 

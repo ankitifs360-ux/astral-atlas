@@ -256,6 +256,14 @@ export const files = pgTable(
       length: 64,
     }),
 
+    /*
+     * Source text used by the read-only CodeMirror panel.
+     *
+     * Nullable so analyses created before this migration
+     * remain valid. New B13 analyses will persist it.
+     */
+    sourceContent: text('source_content'),
+
     isSupported: boolean('is_supported').default(true).notNull(),
 
     parseStatus: fileParseStatusEnum('parse_status').default('pending').notNull(),
@@ -1092,7 +1100,4 @@ export const issueFileMatches = pgTable(
   ],
 );
 
-
-export {
-  eq,
-} from 'drizzle-orm';
+export { eq } from 'drizzle-orm';

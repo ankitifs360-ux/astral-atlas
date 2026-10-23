@@ -280,6 +280,8 @@ describe('persistFilesAndMetrics', () => {
 
         contentHash: null,
 
+        sourceContent: null,
+
         isSupported: true,
 
         parseStatus: 'analyzed',
@@ -287,7 +289,7 @@ describe('persistFilesAndMetrics', () => {
     ]);
   });
 
-  it('persists explicit file metadata', async () => {
+  it('persists explicit file metadata and source content', async () => {
     const input = createInput();
 
     input.files = [
@@ -299,6 +301,8 @@ describe('persistFilesAndMetrics', () => {
         sizeBytes: 250,
 
         contentHash: 'abc123',
+
+        sourceContent: 'export const server = true;\n',
 
         isSupported: false,
 
@@ -329,6 +333,8 @@ describe('persistFilesAndMetrics', () => {
         sizeBytes: 250,
 
         contentHash: 'abc123',
+
+        sourceContent: 'export const server = true;\n',
 
         isSupported: false,
 

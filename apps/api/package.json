@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "engines": {
@@ -16,6 +17,8 @@
     "@fastify/cors": "11.3.1",
     "@fastify/multipart": "10.1.2",
     "@fastify/rate-limit": "11.2.1",
+    "@fastify/swagger": "9.9.2",
+    "@fastify/swagger-ui": "6.1.2",
     "@fastify/type-provider-typebox": "6.3.0",
     "bullmq": "6.3.10",
     "fastify": "5.12.7",

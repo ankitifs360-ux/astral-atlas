@@ -378,6 +378,8 @@ describe('AnalysisStore', () => {
 
           contentHash: 'b'.repeat(64),
 
+          sourceContent: 'export class Service {}\n',
+
           isSupported: true,
 
           parseStatus: 'analyzed' as const,
@@ -431,6 +433,9 @@ describe('AnalysisStore', () => {
           sizeBytes: 120,
 
           contentHash: 'a'.repeat(64),
+
+          sourceContent:
+            "import { Service } from './service.js';\nexport function startServer() {}\n",
 
           isSupported: true,
 
@@ -694,6 +699,9 @@ describe('AnalysisStore', () => {
 
           path: 'src/server.ts',
 
+          sourceContent:
+            "import { Service } from './service.js';\nexport function startServer() {}\n",
+
           metrics: expect.objectContaining({
             cyclomaticComplexity: 2,
 
@@ -717,6 +725,8 @@ describe('AnalysisStore', () => {
           id: SERVICE_FILE_ID,
 
           path: 'src/service.ts',
+
+          sourceContent: 'export class Service {}\n',
 
           metrics: expect.objectContaining({
             cyclomaticComplexity: 3,
@@ -931,6 +941,8 @@ describe('AnalysisStore', () => {
 
             contentHash: null,
 
+            sourceContent: null,
+
             isSupported: true,
 
             parseStatus: 'partial',
@@ -996,6 +1008,8 @@ describe('AnalysisStore', () => {
 
           path: 'src/server.ts',
 
+          sourceContent: null,
+
           metrics: null,
         }),
       ]);
@@ -1036,6 +1050,8 @@ describe('AnalysisStore', () => {
             sizeBytes: 120,
 
             contentHash: null,
+
+            sourceContent: null,
 
             isSupported: true,
 
@@ -1148,6 +1164,8 @@ describe('AnalysisStore', () => {
             sizeBytes: 120,
 
             contentHash: null,
+
+            sourceContent: null,
 
             isSupported: true,
 

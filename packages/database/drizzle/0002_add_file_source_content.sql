@@ -1,0 +1,1 @@
+ALTER TABLE "files" ADD COLUMN "source_content" text;

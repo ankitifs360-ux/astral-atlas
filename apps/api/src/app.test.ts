@@ -1,6 +1,8 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 
+import type { Database } from '@astral-atlas/database';
+
 import { buildApp } from './app.js';
 import type { ApiConfig } from './config.js';
 
@@ -38,10 +40,26 @@ function createTestConfig(overrides: Partial<ApiConfig> = {}): ApiConfig {
   };
 }
 
+/*
+ * These app-level tests exercise health, readiness,
+ * validation, not-found, rate-limit and OpenAPI behavior.
+ *
+ * None of them call the completed-analysis routes, so a
+ * lightweight typed database stub is sufficient here.
+ *
+ * Dedicated analysis-results store tests cover actual
+ * database query behavior separately.
+ */
+function createTestDatabase(): Database {
+  return {} as Database;
+}
+
 describe('Fastify API', () => {
   it('returns liveness health', async () => {
     const app = await buildApp({
       config: createTestConfig(),
+
+      database: createTestDatabase(),
 
       analysisEventHub: new AnalysisEventHub(),
 
@@ -74,6 +92,8 @@ describe('Fastify API', () => {
   it('reports ready when dependencies are healthy', async () => {
     const app = await buildApp({
       config: createTestConfig(),
+
+      database: createTestDatabase(),
 
       analysisEventHub: new AnalysisEventHub(),
 
@@ -113,6 +133,8 @@ describe('Fastify API', () => {
     const app = await buildApp({
       config: createTestConfig(),
 
+      database: createTestDatabase(),
+
       analysisEventHub: new AnalysisEventHub(),
 
       readinessProbe: async () => {
@@ -148,6 +170,8 @@ describe('Fastify API', () => {
   it('returns standardized validation errors', async () => {
     const app = await buildApp({
       config: createTestConfig(),
+
+      database: createTestDatabase(),
 
       analysisEventHub: new AnalysisEventHub(),
 
@@ -208,6 +232,8 @@ describe('Fastify API', () => {
     const app = await buildApp({
       config: createTestConfig(),
 
+      database: createTestDatabase(),
+
       analysisEventHub: new AnalysisEventHub(),
 
       readinessProbe: async () => ({
@@ -243,6 +269,8 @@ describe('Fastify API', () => {
       config: createTestConfig({
         rateLimitMax: 2,
       }),
+
+      database: createTestDatabase(),
 
       analysisEventHub: new AnalysisEventHub(),
 
@@ -291,6 +319,93 @@ describe('Fastify API', () => {
           code: 'RATE_LIMITED',
         },
       });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('serves OpenAPI documentation for the public API', async () => {
+    const app = await buildApp({
+      config: createTestConfig(),
+
+      database: createTestDatabase(),
+
+      analysisEventHub: new AnalysisEventHub(),
+
+      readinessProbe: async () => ({
+        database: 'up',
+
+        redis: 'up',
+      }),
+
+      logger: false,
+    });
+
+    try {
+      /*
+       * Verify the interactive Swagger UI itself is available.
+       */
+      const uiResponse = await app.inject({
+        method: 'GET',
+
+        url: '/docs/',
+      });
+
+      expect(uiResponse.statusCode).toBe(200);
+
+      expect(uiResponse.headers['content-type']).toContain('text/html');
+
+      /*
+       * Verify the generated OpenAPI document contains
+       * Astral Atlas metadata and its important public routes.
+       */
+      const jsonResponse = await app.inject({
+        method: 'GET',
+
+        url: '/docs/json',
+      });
+
+      expect(jsonResponse.statusCode).toBe(200);
+
+      expect(jsonResponse.json()).toMatchObject({
+        openapi: '3.1.0',
+
+        info: {
+          title: 'Astral Atlas API',
+
+          version: '0.1.0',
+        },
+
+        paths: {
+          '/health': {},
+
+          '/ready': {},
+
+          '/api/analyses/{analysisId}/graph': {},
+
+          '/api/analyses/{analysisId}/files/{fileId}': {},
+
+          '/api/analyses/{analysisId}/search': {},
+
+          '/api/analyses/{analysisId}/pathfinder': {},
+
+          '/api/analyses/{analysisId}/events': {},
+        },
+      });
+
+      /*
+       * Swagger UI also exposes a YAML representation for
+       * tooling and human-readable inspection.
+       */
+      const yamlResponse = await app.inject({
+        method: 'GET',
+
+        url: '/docs/yaml',
+      });
+
+      expect(yamlResponse.statusCode).toBe(200);
+
+      expect(yamlResponse.body).toContain('Astral Atlas API');
     } finally {
       await app.close();
     }

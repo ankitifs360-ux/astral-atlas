@@ -66,6 +66,8 @@ export interface StoredAnalysisFile {
 
   contentHash: string | null;
 
+  sourceContent: string | null;
+
   isSupported: boolean;
 
   parseStatus: 'pending' | 'analyzed' | 'partial' | 'unsupported' | 'error';
@@ -376,6 +378,8 @@ export class AnalysisStore {
 
         contentHash: files.contentHash,
 
+        sourceContent: files.sourceContent,
+
         isSupported: files.isSupported,
 
         parseStatus: files.parseStatus,
@@ -478,6 +482,8 @@ export class AnalysisStore {
         sizeBytes: row.sizeBytes,
 
         contentHash: row.contentHash,
+
+        sourceContent: row.sourceContent,
 
         isSupported: row.isSupported,
 

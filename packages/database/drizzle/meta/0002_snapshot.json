@@ -1,0 +1,1989 @@
+{
+  "id": "65f8d8ba-b17f-4a0e-bd1c-a21be4b46de2",
+  "prevId": "7e64f74a-806c-4e1a-8baf-626b8b9aab9b",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.analyses": {
+      "name": "analyses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "repository_id": {
+          "name": "repository_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "commit_sha": {
+          "name": "commit_sha",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "analysis_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "warning_count": {
+          "name": "warning_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "file_count": {
+          "name": "file_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "analyses_repository_idx": {
+          "name": "analyses_repository_idx",
+          "columns": [
+            {
+              "expression": "repository_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analyses_status_idx": {
+          "name": "analyses_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analyses_created_at_idx": {
+          "name": "analyses_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "analyses_repository_id_repositories_id_fk": {
+          "name": "analyses_repository_id_repositories_id_fk",
+          "tableFrom": "analyses",
+          "tableTo": "repositories",
+          "columnsFrom": [
+            "repository_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "analyses_repository_commit_unique": {
+          "name": "analyses_repository_commit_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "repository_id",
+            "commit_sha"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "analyses_warning_count_nonnegative": {
+          "name": "analyses_warning_count_nonnegative",
+          "value": "\n          \"analyses\".\"warning_count\" >= 0\n        "
+        },
+        "analyses_file_count_nonnegative": {
+          "name": "analyses_file_count_nonnegative",
+          "value": "\n          \"analyses\".\"file_count\" >= 0\n        "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.analysis_finding_files": {
+      "name": "analysis_finding_files",
+      "schema": "",
+      "columns": {
+        "finding_id": {
+          "name": "finding_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_id": {
+          "name": "file_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "analysis_finding_files_file_idx": {
+          "name": "analysis_finding_files_file_idx",
+          "columns": [
+            {
+              "expression": "file_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "analysis_finding_files_finding_id_analysis_findings_id_fk": {
+          "name": "analysis_finding_files_finding_id_analysis_findings_id_fk",
+          "tableFrom": "analysis_finding_files",
+          "tableTo": "analysis_findings",
+          "columnsFrom": [
+            "finding_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "analysis_finding_files_file_id_files_id_fk": {
+          "name": "analysis_finding_files_file_id_files_id_fk",
+          "tableFrom": "analysis_finding_files",
+          "tableTo": "files",
+          "columnsFrom": [
+            "file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "analysis_finding_files_pk": {
+          "name": "analysis_finding_files_pk",
+          "columns": [
+            "finding_id",
+            "file_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.analysis_findings": {
+      "name": "analysis_findings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "analysis_id": {
+          "name": "analysis_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "finding_key": {
+          "name": "finding_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "analysis_finding_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "severity": {
+          "name": "severity",
+          "type": "analysis_finding_severity",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "analysis_findings_analysis_idx": {
+          "name": "analysis_findings_analysis_idx",
+          "columns": [
+            {
+              "expression": "analysis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_findings_analysis_kind_idx": {
+          "name": "analysis_findings_analysis_kind_idx",
+          "columns": [
+            {
+              "expression": "analysis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_findings_analysis_severity_idx": {
+          "name": "analysis_findings_analysis_severity_idx",
+          "columns": [
+            {
+              "expression": "analysis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "severity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "analysis_findings_analysis_id_analyses_id_fk": {
+          "name": "analysis_findings_analysis_id_analyses_id_fk",
+          "tableFrom": "analysis_findings",
+          "tableTo": "analyses",
+          "columnsFrom": [
+            "analysis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "analysis_findings_analysis_key_unique": {
+          "name": "analysis_findings_analysis_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "analysis_id",
+            "finding_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.analysis_results": {
+      "name": "analysis_results",
+      "schema": "",
+      "columns": {
+        "analysis_id": {
+          "name": "analysis_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "repository_summary": {
+          "name": "repository_summary",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "health_score": {
+          "name": "health_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "health_rating": {
+          "name": "health_rating",
+          "type": "repository_health_rating",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "health_dimensions": {
+          "name": "health_dimensions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "onboarding_considered_file_count": {
+          "name": "onboarding_considered_file_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "onboarding_max_steps": {
+          "name": "onboarding_max_steps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "analysis_results_health_score_idx": {
+          "name": "analysis_results_health_score_idx",
+          "columns": [
+            {
+              "expression": "health_score",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "analysis_results_health_rating_idx": {
+          "name": "analysis_results_health_rating_idx",
+          "columns": [
+            {
+              "expression": "health_rating",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "analysis_results_analysis_id_analyses_id_fk": {
+          "name": "analysis_results_analysis_id_analyses_id_fk",
+          "tableFrom": "analysis_results",
+          "tableTo": "analyses",
+          "columnsFrom": [
+            "analysis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "analysis_results_health_score_range": {
+          "name": "analysis_results_health_score_range",
+          "value": "\n          \"analysis_results\".\"health_score\" >= 0\n          AND \"analysis_results\".\"health_score\" <= 100\n        "
+        },
+        "analysis_results_onboarding_considered_nonnegative": {
+          "name": "analysis_results_onboarding_considered_nonnegative",
+          "value": "\n          \"analysis_results\".\"onboarding_considered_file_count\" >= 0\n        "
+        },
+        "analysis_results_onboarding_max_steps_positive": {
+          "name": "analysis_results_onboarding_max_steps_positive",
+          "value": "\n          \"analysis_results\".\"onboarding_max_steps\" >= 1\n        "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.edges": {
+      "name": "edges",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "analysis_id": {
+          "name": "analysis_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_file_id": {
+          "name": "from_file_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_file_id": {
+          "name": "to_file_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_symbol_id": {
+          "name": "from_symbol_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_symbol_id": {
+          "name": "to_symbol_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "edge_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "weight": {
+          "name": "weight",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "is_dynamic": {
+          "name": "is_dynamic",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "edges_analysis_type_idx": {
+          "name": "edges_analysis_type_idx",
+          "columns": [
+            {
+              "expression": "analysis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "edges_from_file_idx": {
+          "name": "edges_from_file_idx",
+          "columns": [
+            {
+              "expression": "from_file_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "edges_to_file_idx": {
+          "name": "edges_to_file_idx",
+          "columns": [
+            {
+              "expression": "to_file_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "edges_from_symbol_idx": {
+          "name": "edges_from_symbol_idx",
+          "columns": [
+            {
+              "expression": "from_symbol_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "edges_to_symbol_idx": {
+          "name": "edges_to_symbol_idx",
+          "columns": [
+            {
+              "expression": "to_symbol_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "edges_analysis_id_analyses_id_fk": {
+          "name": "edges_analysis_id_analyses_id_fk",
+          "tableFrom": "edges",
+          "tableTo": "analyses",
+          "columnsFrom": [
+            "analysis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "edges_from_file_id_files_id_fk": {
+          "name": "edges_from_file_id_files_id_fk",
+          "tableFrom": "edges",
+          "tableTo": "files",
+          "columnsFrom": [
+            "from_file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "edges_to_file_id_files_id_fk": {
+          "name": "edges_to_file_id_files_id_fk",
+          "tableFrom": "edges",
+          "tableTo": "files",
+          "columnsFrom": [
+            "to_file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "edges_from_symbol_id_symbols_id_fk": {
+          "name": "edges_from_symbol_id_symbols_id_fk",
+          "tableFrom": "edges",
+          "tableTo": "symbols",
+          "columnsFrom": [
+            "from_symbol_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "edges_to_symbol_id_symbols_id_fk": {
+          "name": "edges_to_symbol_id_symbols_id_fk",
+          "tableFrom": "edges",
+          "tableTo": "symbols",
+          "columnsFrom": [
+            "to_symbol_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "edges_identity_unique": {
+          "name": "edges_identity_unique",
+          "nullsNotDistinct": true,
+          "columns": [
+            "analysis_id",
+            "from_file_id",
+            "to_file_id",
+            "type",
+            "from_symbol_id",
+            "to_symbol_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "edges_weight_positive": {
+          "name": "edges_weight_positive",
+          "value": "\n          \"edges\".\"weight\" >= 1\n        "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.files": {
+      "name": "files",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "analysis_id": {
+          "name": "analysis_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "language": {
+          "name": "language",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_hash": {
+          "name": "content_hash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_content": {
+          "name": "source_content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_supported": {
+          "name": "is_supported",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "parse_status": {
+          "name": "parse_status",
+          "type": "file_parse_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "files_analysis_idx": {
+          "name": "files_analysis_idx",
+          "columns": [
+            {
+              "expression": "analysis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "files_analysis_language_idx": {
+          "name": "files_analysis_language_idx",
+          "columns": [
+            {
+              "expression": "analysis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "language",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "files_parse_status_idx": {
+          "name": "files_parse_status_idx",
+          "columns": [
+            {
+              "expression": "parse_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "files_analysis_id_analyses_id_fk": {
+          "name": "files_analysis_id_analyses_id_fk",
+          "tableFrom": "files",
+          "tableTo": "analyses",
+          "columnsFrom": [
+            "analysis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "files_analysis_path_unique": {
+          "name": "files_analysis_path_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "analysis_id",
+            "path"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "files_size_bytes_nonnegative": {
+          "name": "files_size_bytes_nonnegative",
+          "value": "\n          \"files\".\"size_bytes\" >= 0\n        "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.issue_file_matches": {
+      "name": "issue_file_matches",
+      "schema": "",
+      "columns": {
+        "issue_id": {
+          "name": "issue_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_id": {
+          "name": "file_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "issue_file_matches_file_idx": {
+          "name": "issue_file_matches_file_idx",
+          "columns": [
+            {
+              "expression": "file_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "issue_file_matches_issue_id_issues_id_fk": {
+          "name": "issue_file_matches_issue_id_issues_id_fk",
+          "tableFrom": "issue_file_matches",
+          "tableTo": "issues",
+          "columnsFrom": [
+            "issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "issue_file_matches_file_id_files_id_fk": {
+          "name": "issue_file_matches_file_id_files_id_fk",
+          "tableFrom": "issue_file_matches",
+          "tableTo": "files",
+          "columnsFrom": [
+            "file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "issue_file_matches_pk": {
+          "name": "issue_file_matches_pk",
+          "columns": [
+            "issue_id",
+            "file_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "issue_file_matches_confidence_range": {
+          "name": "issue_file_matches_confidence_range",
+          "value": "\n          \"issue_file_matches\".\"confidence\" >= 0\n          AND \"issue_file_matches\".\"confidence\" <= 1\n        "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.issues": {
+      "name": "issues",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "analysis_id": {
+          "name": "analysis_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issue_number": {
+          "name": "issue_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "html_url": {
+          "name": "html_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "issue_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "labels": {
+          "name": "labels",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "\n              ARRAY[]::text[]\n            "
+        },
+        "is_good_first_issue": {
+          "name": "is_good_first_issue",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "github_created_at": {
+          "name": "github_created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "github_updated_at": {
+          "name": "github_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "issues_analysis_idx": {
+          "name": "issues_analysis_idx",
+          "columns": [
+            {
+              "expression": "analysis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "issues_good_first_idx": {
+          "name": "issues_good_first_idx",
+          "columns": [
+            {
+              "expression": "analysis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "is_good_first_issue",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "issues_analysis_id_analyses_id_fk": {
+          "name": "issues_analysis_id_analyses_id_fk",
+          "tableFrom": "issues",
+          "tableTo": "analyses",
+          "columnsFrom": [
+            "analysis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "issues_analysis_number_unique": {
+          "name": "issues_analysis_number_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "analysis_id",
+            "issue_number"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "issues_number_positive": {
+          "name": "issues_number_positive",
+          "value": "\n          \"issues\".\"issue_number\" >= 1\n        "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.metrics": {
+      "name": "metrics",
+      "schema": "",
+      "columns": {
+        "file_id": {
+          "name": "file_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "loc": {
+          "name": "loc",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_count": {
+          "name": "token_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cyclomatic_complexity": {
+          "name": "cyclomatic_complexity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "import_count": {
+          "name": "import_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "function_count": {
+          "name": "function_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "class_count": {
+          "name": "class_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "has_syntax_errors": {
+          "name": "has_syntax_errors",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "churn_additions": {
+          "name": "churn_additions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "churn_deletions": {
+          "name": "churn_deletions",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "churn_commits": {
+          "name": "churn_commits",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fan_in": {
+          "name": "fan_in",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fan_out": {
+          "name": "fan_out",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transitive_dependency_count": {
+          "name": "transitive_dependency_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "blast_radius": {
+          "name": "blast_radius",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "blast_max_distance": {
+          "name": "blast_max_distance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "in_dependency_cycle": {
+          "name": "in_dependency_cycle",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cyclic_component_size": {
+          "name": "cyclic_component_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "risk_score": {
+          "name": "risk_score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "metrics_risk_score_idx": {
+          "name": "metrics_risk_score_idx",
+          "columns": [
+            {
+              "expression": "risk_score",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "metrics_fan_in_idx": {
+          "name": "metrics_fan_in_idx",
+          "columns": [
+            {
+              "expression": "fan_in",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "metrics_fan_out_idx": {
+          "name": "metrics_fan_out_idx",
+          "columns": [
+            {
+              "expression": "fan_out",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "metrics_blast_radius_idx": {
+          "name": "metrics_blast_radius_idx",
+          "columns": [
+            {
+              "expression": "blast_radius",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "metrics_file_id_files_id_fk": {
+          "name": "metrics_file_id_files_id_fk",
+          "tableFrom": "metrics",
+          "tableTo": "files",
+          "columnsFrom": [
+            "file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "metrics_loc_nonnegative": {
+          "name": "metrics_loc_nonnegative",
+          "value": "\n          \"metrics\".\"loc\" IS NULL\n          OR \"metrics\".\"loc\" >= 0\n        "
+        },
+        "metrics_token_count_nonnegative": {
+          "name": "metrics_token_count_nonnegative",
+          "value": "\n          \"metrics\".\"token_count\" IS NULL\n          OR \"metrics\".\"token_count\" >= 0\n        "
+        },
+        "metrics_complexity_positive": {
+          "name": "metrics_complexity_positive",
+          "value": "\n          \"metrics\".\"cyclomatic_complexity\" IS NULL\n          OR \"metrics\".\"cyclomatic_complexity\" >= 1\n        "
+        },
+        "metrics_import_count_nonnegative": {
+          "name": "metrics_import_count_nonnegative",
+          "value": "\n          \"metrics\".\"import_count\" IS NULL\n          OR \"metrics\".\"import_count\" >= 0\n        "
+        },
+        "metrics_function_count_nonnegative": {
+          "name": "metrics_function_count_nonnegative",
+          "value": "\n          \"metrics\".\"function_count\" IS NULL\n          OR \"metrics\".\"function_count\" >= 0\n        "
+        },
+        "metrics_class_count_nonnegative": {
+          "name": "metrics_class_count_nonnegative",
+          "value": "\n          \"metrics\".\"class_count\" IS NULL\n          OR \"metrics\".\"class_count\" >= 0\n        "
+        },
+        "metrics_churn_additions_nonnegative": {
+          "name": "metrics_churn_additions_nonnegative",
+          "value": "\n          \"metrics\".\"churn_additions\" IS NULL\n          OR \"metrics\".\"churn_additions\" >= 0\n        "
+        },
+        "metrics_churn_deletions_nonnegative": {
+          "name": "metrics_churn_deletions_nonnegative",
+          "value": "\n          \"metrics\".\"churn_deletions\" IS NULL\n          OR \"metrics\".\"churn_deletions\" >= 0\n        "
+        },
+        "metrics_churn_commits_nonnegative": {
+          "name": "metrics_churn_commits_nonnegative",
+          "value": "\n          \"metrics\".\"churn_commits\" IS NULL\n          OR \"metrics\".\"churn_commits\" >= 0\n        "
+        },
+        "metrics_fan_in_nonnegative": {
+          "name": "metrics_fan_in_nonnegative",
+          "value": "\n          \"metrics\".\"fan_in\" IS NULL\n          OR \"metrics\".\"fan_in\" >= 0\n        "
+        },
+        "metrics_fan_out_nonnegative": {
+          "name": "metrics_fan_out_nonnegative",
+          "value": "\n          \"metrics\".\"fan_out\" IS NULL\n          OR \"metrics\".\"fan_out\" >= 0\n        "
+        },
+        "metrics_transitive_dependency_count_nonnegative": {
+          "name": "metrics_transitive_dependency_count_nonnegative",
+          "value": "\n          \"metrics\".\"transitive_dependency_count\" IS NULL\n          OR \"metrics\".\"transitive_dependency_count\" >= 0\n        "
+        },
+        "metrics_blast_radius_nonnegative": {
+          "name": "metrics_blast_radius_nonnegative",
+          "value": "\n          \"metrics\".\"blast_radius\" IS NULL\n          OR \"metrics\".\"blast_radius\" >= 0\n        "
+        },
+        "metrics_blast_max_distance_nonnegative": {
+          "name": "metrics_blast_max_distance_nonnegative",
+          "value": "\n          \"metrics\".\"blast_max_distance\" IS NULL\n          OR \"metrics\".\"blast_max_distance\" >= 0\n        "
+        },
+        "metrics_cyclic_component_size_nonnegative": {
+          "name": "metrics_cyclic_component_size_nonnegative",
+          "value": "\n          \"metrics\".\"cyclic_component_size\" IS NULL\n          OR \"metrics\".\"cyclic_component_size\" >= 0\n        "
+        },
+        "metrics_cycle_consistency": {
+          "name": "metrics_cycle_consistency",
+          "value": "\n          \"metrics\".\"in_dependency_cycle\" IS NULL\n          OR \"metrics\".\"cyclic_component_size\" IS NULL\n          OR (\n            \"metrics\".\"in_dependency_cycle\" = true\n            AND \"metrics\".\"cyclic_component_size\" >= 1\n          )\n          OR (\n            \"metrics\".\"in_dependency_cycle\" = false\n            AND \"metrics\".\"cyclic_component_size\" = 0\n          )\n        "
+        },
+        "metrics_risk_score_range": {
+          "name": "metrics_risk_score_range",
+          "value": "\n          \"metrics\".\"risk_score\" IS NULL\n          OR (\n            \"metrics\".\"risk_score\" >= 0\n            AND \"metrics\".\"risk_score\" <= 100\n          )\n        "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.onboarding_steps": {
+      "name": "onboarding_steps",
+      "schema": "",
+      "columns": {
+        "analysis_id": {
+          "name": "analysis_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step_order": {
+          "name": "step_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_id": {
+          "name": "file_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "signals": {
+          "name": "signals",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "onboarding_steps_file_idx": {
+          "name": "onboarding_steps_file_idx",
+          "columns": [
+            {
+              "expression": "file_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "onboarding_steps_analysis_id_analyses_id_fk": {
+          "name": "onboarding_steps_analysis_id_analyses_id_fk",
+          "tableFrom": "onboarding_steps",
+          "tableTo": "analyses",
+          "columnsFrom": [
+            "analysis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "onboarding_steps_file_id_files_id_fk": {
+          "name": "onboarding_steps_file_id_files_id_fk",
+          "tableFrom": "onboarding_steps",
+          "tableTo": "files",
+          "columnsFrom": [
+            "file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "onboarding_steps_pk": {
+          "name": "onboarding_steps_pk",
+          "columns": [
+            "analysis_id",
+            "step_order"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "onboarding_steps_analysis_file_unique": {
+          "name": "onboarding_steps_analysis_file_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "analysis_id",
+            "file_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "onboarding_steps_order_positive": {
+          "name": "onboarding_steps_order_positive",
+          "value": "\n          \"onboarding_steps\".\"step_order\" >= 1\n        "
+        },
+        "onboarding_steps_score_nonnegative": {
+          "name": "onboarding_steps_score_nonnegative",
+          "value": "\n          \"onboarding_steps\".\"score\" >= 0\n        "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.repositories": {
+      "name": "repositories",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "repository_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_key": {
+          "name": "source_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "github_owner": {
+          "name": "github_owner",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "github_name": {
+          "name": "github_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "canonical_url": {
+          "name": "canonical_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "default_branch": {
+          "name": "default_branch",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "repositories_source_type_idx": {
+          "name": "repositories_source_type_idx",
+          "columns": [
+            {
+              "expression": "source_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "repositories_github_owner_name_idx": {
+          "name": "repositories_github_owner_name_idx",
+          "columns": [
+            {
+              "expression": "github_owner",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "github_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "repositories_source_key_unique": {
+          "name": "repositories_source_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "source_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "repositories_github_metadata_check": {
+          "name": "repositories_github_metadata_check",
+          "value": "\n          \"repositories\".\"source_type\" <> 'github'\n          OR (\n            \"repositories\".\"github_owner\" IS NOT NULL\n            AND \"repositories\".\"github_name\" IS NOT NULL\n            AND \"repositories\".\"canonical_url\" IS NOT NULL\n          )\n        "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.symbols": {
+      "name": "symbols",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "file_id": {
+          "name": "file_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "symbol_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qualified_name": {
+          "name": "qualified_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_line": {
+          "name": "start_line",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_column": {
+          "name": "start_column",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_line": {
+          "name": "end_line",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_column": {
+          "name": "end_column",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_exported": {
+          "name": "is_exported",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "complexity": {
+          "name": "complexity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "symbols_file_idx": {
+          "name": "symbols_file_idx",
+          "columns": [
+            {
+              "expression": "file_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "symbols_name_idx": {
+          "name": "symbols_name_idx",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "symbols_qualified_name_idx": {
+          "name": "symbols_qualified_name_idx",
+          "columns": [
+            {
+              "expression": "qualified_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "symbols_file_id_files_id_fk": {
+          "name": "symbols_file_id_files_id_fk",
+          "tableFrom": "symbols",
+          "tableTo": "files",
+          "columnsFrom": [
+            "file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "symbols_file_location_unique": {
+          "name": "symbols_file_location_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "file_id",
+            "kind",
+            "qualified_name",
+            "start_line"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "symbols_start_line_positive": {
+          "name": "symbols_start_line_positive",
+          "value": "\n          \"symbols\".\"start_line\" >= 1\n        "
+        },
+        "symbols_end_line_valid": {
+          "name": "symbols_end_line_valid",
+          "value": "\n          \"symbols\".\"end_line\" >= \"symbols\".\"start_line\"\n        "
+        },
+        "symbols_start_column_nonnegative": {
+          "name": "symbols_start_column_nonnegative",
+          "value": "\n          \"symbols\".\"start_column\" >= 0\n        "
+        },
+        "symbols_end_column_nonnegative": {
+          "name": "symbols_end_column_nonnegative",
+          "value": "\n          \"symbols\".\"end_column\" >= 0\n        "
+        },
+        "symbols_complexity_positive": {
+          "name": "symbols_complexity_positive",
+          "value": "\n          \"symbols\".\"complexity\" IS NULL\n          OR \"symbols\".\"complexity\" >= 1\n        "
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.analysis_finding_kind": {
+      "name": "analysis_finding_kind",
+      "schema": "public",
+      "values": [
+        "dependency-cycle",
+        "unresolved-imports",
+        "high-complexity",
+        "high-churn",
+        "large-blast-radius",
+        "high-fan-in",
+        "high-fan-out",
+        "hotspot"
+      ]
+    },
+    "public.analysis_finding_severity": {
+      "name": "analysis_finding_severity",
+      "schema": "public",
+      "values": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "public.analysis_status": {
+      "name": "analysis_status",
+      "schema": "public",
+      "values": [
+        "queued",
+        "running",
+        "completed",
+        "partial",
+        "failed"
+      ]
+    },
+    "public.edge_type": {
+      "name": "edge_type",
+      "schema": "public",
+      "values": [
+        "import",
+        "call"
+      ]
+    },
+    "public.file_parse_status": {
+      "name": "file_parse_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "analyzed",
+        "partial",
+        "unsupported",
+        "error"
+      ]
+    },
+    "public.issue_state": {
+      "name": "issue_state",
+      "schema": "public",
+      "values": [
+        "open",
+        "closed"
+      ]
+    },
+    "public.repository_health_rating": {
+      "name": "repository_health_rating",
+      "schema": "public",
+      "values": [
+        "excellent",
+        "good",
+        "fair",
+        "poor",
+        "critical"
+      ]
+    },
+    "public.repository_source": {
+      "name": "repository_source",
+      "schema": "public",
+      "values": [
+        "github",
+        "zip"
+      ]
+    },
+    "public.symbol_kind": {
+      "name": "symbol_kind",
+      "schema": "public",
+      "values": [
+        "function",
+        "class",
+        "method",
+        "interface",
+        "type",
+        "enum",
+        "variable"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

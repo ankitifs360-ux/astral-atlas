@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "tsx": "4.23.15"
+    "tsx": "4.23.15",
+    "vitest": "5.0.5"
   }
 }

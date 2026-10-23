@@ -1,19 +1,42 @@
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
+
+import type { Database } from '@astral-atlas/database';
 
 import type { ApiConfig } from './config.js';
 import { AppError, createErrorResponse } from './errors.js';
 
+import { registerAnalysisResultsModule } from './modules/analysis-results/register-analysis-results.js';
+
+import { registerAnalysisSubmissionModule } from './modules/analysis-submission/register-analysis-submission.js';
+
+import type { GitHubClient } from './modules/ingestion/github-client.js';
 import { INGESTION_LIMITS } from './modules/ingestion/limits.js';
 
 import type { AnalysisEventHub } from './queues/analysis-event-hub.js';
+import type { AnalysisQueue } from './queues/analysis-queue.js';
 
 import { registerAnalysisEventsRoute } from './routes/analysis-events.js';
 
 import { registerHealthRoutes, type ReadinessProbe } from './routes/health.js';
+
+export interface AnalysisSubmissionDependencies {
+  analysisQueue: AnalysisQueue;
+
+  githubClient: GitHubClient;
+
+  /**
+   * Must be visible to both the API and worker.
+   *
+   * In Docker this will be a shared volume.
+   */
+  zipStagingDirectory: string;
+}
 
 export interface BuildAppOptions {
   config: ApiConfig;
@@ -21,12 +44,26 @@ export interface BuildAppOptions {
   readinessProbe: ReadinessProbe;
 
   /*
-   * The same AnalysisEventHub instance that
-   * receives BullMQ QueueEvents in server.ts.
+   * PostgreSQL dependency used by:
    *
-   * The SSE route subscribes to this instance.
+   * - completed-analysis read API
+   * - analysis submission state
+   */
+  database: Database;
+
+  /*
+   * BullMQ QueueEvents are converted into SSE events
+   * through this shared hub.
    */
   analysisEventHub: AnalysisEventHub;
+
+  /*
+   * Submission dependencies are optional here so small
+   * isolated app tests do not need Redis/GitHub clients.
+   *
+   * server.ts will provide these in production.
+   */
+  analysisSubmission?: AnalysisSubmissionDependencies;
 
   closeResources?: () => Promise<void>;
 
@@ -147,11 +184,10 @@ export async function buildApp(options: BuildAppOptions) {
     trustProxy: options.config.trustProxy,
 
     /*
-     * Normal JSON requests remain limited
-     * to 1 MiB.
+     * Normal JSON requests stay limited to 1 MiB.
      *
-     * Multipart repository uploads use their
-     * own independent limit below.
+     * ZIP multipart uploads have their own larger,
+     * independent limit below.
      */
     bodyLimit: 1_048_576,
 
@@ -165,45 +201,37 @@ export async function buildApp(options: BuildAppOptions) {
   });
 
   /*
-   * Repository ZIP upload support.
+   * Repository ZIP upload parsing.
    *
-   * This enables multipart parsing only.
-   *
-   * Actual repository analysis must never be
-   * performed inside the HTTP request handler.
+   * This only accepts and streams the upload.
+   * Extraction and analysis happen in the worker.
    */
   await app.register(multipart, {
     limits: {
       /*
-       * One repository ZIP per request.
+       * Exactly one repository ZIP.
        */
       files: 1,
 
       /*
-       * No normal multipart text fields are
-       * currently required.
+       * No normal multipart text fields.
        */
       fields: 0,
 
       /*
-       * One total multipart part:
-       * the repository ZIP.
+       * One total multipart part.
        */
       parts: 1,
 
       /*
-       * Maximum compressed archive size.
+       * Maximum compressed ZIP size.
        */
       fileSize: INGESTION_LIMITS.maxArchiveBytes,
     },
 
     /*
-     * Instead of immediately throwing when
-     * Fastify reaches the file-size limit,
-     * the stream is marked as truncated.
-     *
-     * stageZipUpload() later converts this
-     * into our standardized AppError.
+     * stageZipUpload() detects the truncated stream and
+     * converts it into our standardized AppError.
      */
     throwFileSizeLimit: false,
   });
@@ -218,22 +246,109 @@ export async function buildApp(options: BuildAppOptions) {
     ipv6Subnet: 64,
   });
 
+  /*
+   * ---------------------------------------------------------
+   * OpenAPI documentation
+   * ---------------------------------------------------------
+   *
+   * Swagger must be registered before application routes so
+   * its onRoute hook can discover their schemas.
+   *
+   * Documentation endpoints:
+   *
+   * GET /docs/
+   * GET /docs/json
+   * GET /docs/yaml
+   */
+  await app.register(swagger, {
+    openapi: {
+      openapi: '3.1.0',
+
+      info: {
+        title: 'Astral Atlas API',
+
+        description:
+          'Backend API for repository ingestion, analysis progress, dependency graph exploration, search, and onboarding pathfinding.',
+
+        version: '0.1.0',
+      },
+    },
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+
+    uiConfig: {
+      docExpansion: 'list',
+
+      deepLinking: true,
+    },
+
+    /*
+     * Generate a restrictive Content-Security-Policy for
+     * the Swagger UI assets instead of disabling CSP.
+     */
+    staticCSP: true,
+  });
+
   registerErrorHandlers(app);
 
   /*
-   * Basic operational endpoints.
+   * ---------------------------------------------------------
+   * Operational endpoints
+   * ---------------------------------------------------------
    */
   await registerHealthRoutes(app, options.readinessProbe);
 
   /*
-   * Long-lived Server-Sent Events endpoint:
+   * ---------------------------------------------------------
+   * Repository submission
+   * ---------------------------------------------------------
    *
-   * GET
-   * /api/analyses/:analysisId/events
+   * POST /api/analyses/github
+   * POST /api/analyses/zip
    *
-   * This receives events from the SAME
-   * AnalysisEventHub instance connected to
-   * BullMQ QueueEvents in server.ts.
+   * The HTTP request only resolves/stages the source and
+   * creates/reuses the BullMQ analysis job.
+   *
+   * Heavy repository analysis never happens here.
+   */
+  if (options.analysisSubmission !== undefined) {
+    registerAnalysisSubmissionModule({
+      app,
+
+      database: options.database,
+
+      analysisQueue: options.analysisSubmission.analysisQueue,
+
+      githubClient: options.analysisSubmission.githubClient,
+
+      zipStagingDirectory: options.analysisSubmission.zipStagingDirectory,
+    });
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * Completed-analysis REST API
+   * ---------------------------------------------------------
+   *
+   * GET /api/analyses/:analysisId/graph
+   * GET /api/analyses/:analysisId/files/:fileId
+   * GET /api/analyses/:analysisId/search
+   * GET /api/analyses/:analysisId/pathfinder
+   */
+  registerAnalysisResultsModule({
+    app,
+
+    database: options.database,
+  });
+
+  /*
+   * ---------------------------------------------------------
+   * Live analysis progress
+   * ---------------------------------------------------------
+   *
+   * GET /api/analyses/:analysisId/events
    */
   registerAnalysisEventsRoute(app, options.analysisEventHub);
 

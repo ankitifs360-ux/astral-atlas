@@ -15,6 +15,15 @@ export interface PersistAnalysisFileInput {
 
   contentHash?: string;
 
+  /**
+   * Original UTF-8 source text.
+   *
+   * Persisted so the frontend can display the file later
+   * even after the temporary cloned/extracted repository
+   * has been deleted.
+   */
+  sourceContent?: string;
+
   isSupported?: boolean;
 
   parseStatus?: 'pending' | 'analyzed' | 'partial' | 'unsupported' | 'error';

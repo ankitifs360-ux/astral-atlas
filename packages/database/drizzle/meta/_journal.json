@@ -15,6 +15,13 @@
       "when": 1792699926304,
       "tag": "0001_dapper_george_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792709458733,
+      "tag": "0002_add_file_source_content",
+      "breakpoints": true
     }
   ]
 }
