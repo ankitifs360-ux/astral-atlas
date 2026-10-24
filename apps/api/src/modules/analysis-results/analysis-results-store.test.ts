@@ -16,16 +16,14 @@ interface FakeDatabaseResult {
 }
 
 function createSelectBuilder(response: readonly unknown[]) {
-  let builder: {
+  const builder: {
     from: ReturnType<typeof vi.fn>;
     leftJoin: ReturnType<typeof vi.fn>;
     innerJoin: ReturnType<typeof vi.fn>;
     where: ReturnType<typeof vi.fn>;
     limit: ReturnType<typeof vi.fn>;
     then: Promise<readonly unknown[]>['then'];
-  };
-
-  builder = {
+  } = {
     from: vi.fn(() => builder),
     leftJoin: vi.fn(() => builder),
     innerJoin: vi.fn(() => builder),

@@ -305,6 +305,52 @@ describe('analysis submission routes', () => {
         await app.close();
       }
     });
+
+    it('handles 100 concurrent GitHub submissions', async () => {
+      const { app, resolveRepository, submitGitHub } = await createTestApp();
+
+      const concurrentRequestCount = 100;
+
+      try {
+        const responses = await Promise.all(
+          Array.from({ length: concurrentRequestCount }, () =>
+            app.inject({
+              method: 'POST',
+
+              url: '/api/analyses/github',
+
+              payload: {
+                repositoryUrl: 'https://github.com/facebook/react',
+              },
+            }),
+          ),
+        );
+
+        expect(responses).toHaveLength(concurrentRequestCount);
+
+        for (const response of responses) {
+          expect(response.statusCode).toBe(202);
+
+          expect(response.json()).toEqual({
+            analysisId: ANALYSIS_ID,
+
+            repositoryId: REPOSITORY_ID,
+
+            status: 'queued',
+
+            state: 'created',
+
+            cacheHit: false,
+          });
+        }
+
+        expect(resolveRepository).toHaveBeenCalledTimes(concurrentRequestCount);
+
+        expect(submitGitHub).toHaveBeenCalledTimes(concurrentRequestCount);
+      } finally {
+        await app.close();
+      }
+    });
   });
 
   describe('POST /api/analyses/zip', () => {

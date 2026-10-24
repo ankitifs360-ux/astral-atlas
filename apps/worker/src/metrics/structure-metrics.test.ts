@@ -62,6 +62,8 @@ describe('calculateFileStructureMetrics', () => {
           async: false,
 
           range: createRange(3),
+
+          isExported: false,
         },
       ],
 
@@ -70,6 +72,8 @@ describe('calculateFileStructureMetrics', () => {
           name: 'Service',
 
           range: createRange(2),
+
+          isExported: false,
         },
       ],
     });
@@ -195,6 +199,8 @@ import express from 'express';
           async: false,
 
           range: createRange(0),
+
+          isExported: false,
         },
       ],
     });
@@ -283,6 +289,8 @@ def check(value):
           async: false,
 
           range: createRange(0),
+
+          isExported: false,
         },
 
         {
@@ -291,6 +299,8 @@ def check(value):
           async: false,
 
           range: createRange(5),
+
+          isExported: false,
         },
       ],
     });

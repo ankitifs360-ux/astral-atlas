@@ -46,6 +46,8 @@ function createParsedFile(
         async: false,
 
         range: createRange(index),
+
+        isExported: false,
       }),
     ),
 
@@ -57,6 +59,8 @@ function createParsedFile(
         name: `Class${index}`,
 
         range: createRange(index),
+
+        isExported: false,
       }),
     ),
 

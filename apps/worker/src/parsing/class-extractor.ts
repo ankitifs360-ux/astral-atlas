@@ -107,6 +107,73 @@ function isPythonClass(node: Parser.SyntaxNode): boolean {
   return node.type === 'class_definition';
 }
 
+function unwrapExpressionParent(node: Parser.SyntaxNode): Parser.SyntaxNode {
+  let current = node;
+
+  while (
+    current.parent?.type === 'parenthesized_expression' ||
+    current.parent?.type === 'as_expression' ||
+    current.parent?.type === 'satisfies_expression' ||
+    current.parent?.type === 'type_assertion'
+  ) {
+    current = current.parent;
+  }
+
+  return current;
+}
+
+/**
+ * Detects exports that directly declare the class.
+ *
+ * Supported examples:
+ *
+ * export class Service {}
+ * export default class Service {}
+ * export const Service = class {}
+ *
+ * We intentionally avoid walking arbitrary ancestors
+ * because a nested class inside an exported function or
+ * object should not automatically count as exported.
+ */
+function isExplicitlyExportedClass(node: Parser.SyntaxNode, language: SupportedLanguage): boolean {
+  if (language === 'python') {
+    return false;
+  }
+
+  const expressionNode = unwrapExpressionParent(node);
+  const parent = expressionNode.parent;
+
+  if (!parent) {
+    return false;
+  }
+
+  /*
+   * export class Service {}
+   * export default class Service {}
+   */
+  if (parent.type === 'export_statement') {
+    return true;
+  }
+
+  /*
+   * export const Service = class {};
+   */
+  if (parent.type === 'variable_declarator') {
+    const declaration = parent.parent;
+
+    if (
+      declaration?.type !== 'lexical_declaration' &&
+      declaration?.type !== 'variable_declaration'
+    ) {
+      return false;
+    }
+
+    return declaration.parent?.type === 'export_statement';
+  }
+
+  return false;
+}
+
 export function extractClasses(
   root: Parser.SyntaxNode,
   source: string,
@@ -122,6 +189,8 @@ export function extractClasses(
         name: getClassName(node, source),
 
         range: createRange(node),
+
+        isExported: isExplicitlyExportedClass(node, language),
       });
     }
 

@@ -168,12 +168,12 @@ function mapGraphNode(row: {
 
 function mapHealthDimensions(value: unknown): ApiHealthDimension[] {
   const stored = requireJson<
-    Array<{
+    {
       dimension: ApiHealthDimension['dimension'];
       maxScore: number;
       score: number;
       deductedPoints: number;
-    }>
+    }[]
   >(value, 'health dimensions');
 
   return stored.map((dimension) => ({

@@ -40,7 +40,7 @@ function createZipSource(): AnalysisSubmissionSource {
 }
 
 function createThenableBuilder(response: readonly unknown[]) {
-  let builder: {
+  const builder: {
     values: ReturnType<typeof vi.fn>;
 
     onConflictDoUpdate: ReturnType<typeof vi.fn>;
@@ -58,9 +58,7 @@ function createThenableBuilder(response: readonly unknown[]) {
     set: ReturnType<typeof vi.fn>;
 
     then: Promise<readonly unknown[]>['then'];
-  };
-
-  builder = {
+  } = {
     values: vi.fn(() => builder),
 
     onConflictDoUpdate: vi.fn(() => builder),

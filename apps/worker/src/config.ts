@@ -10,6 +10,16 @@ import { z } from 'zod';
 const workerEnvironmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
 
+  /*
+   * The worker now persists completed analysis
+   * results directly into PostgreSQL.
+   *
+   * Keep this as a validated non-empty connection
+   * string rather than duplicating database-driver
+   * URL parsing rules here.
+   */
+  DATABASE_URL: z.string().trim().min(1, 'DATABASE_URL cannot be empty'),
+
   REDIS_HOST: z.string().min(1).default(DEFAULT_REDIS_HOST),
 
   REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(DEFAULT_REDIS_PORT),
@@ -25,6 +35,11 @@ const workerEnvironmentSchema = z.object({
 
 export interface WorkerConfig {
   nodeEnv: 'development' | 'test' | 'production';
+
+  /*
+   * PostgreSQL connection used by AnalysisStore.
+   */
+  databaseUrl: string;
 
   redis: RedisConnectionConfig;
 }
@@ -82,6 +97,8 @@ export function parseWorkerConfig(source: NodeJS.ProcessEnv): WorkerConfig {
 
   return {
     nodeEnv: result.data.NODE_ENV,
+
+    databaseUrl: result.data.DATABASE_URL,
 
     redis,
   };

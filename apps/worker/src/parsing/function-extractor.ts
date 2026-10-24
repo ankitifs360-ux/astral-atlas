@@ -133,6 +133,80 @@ function isPythonFunction(node: Parser.SyntaxNode): boolean {
   return node.type === 'function_definition' || node.type === 'lambda';
 }
 
+function unwrapExpressionParent(node: Parser.SyntaxNode): Parser.SyntaxNode {
+  let current = node;
+
+  while (
+    current.parent?.type === 'parenthesized_expression' ||
+    current.parent?.type === 'as_expression' ||
+    current.parent?.type === 'satisfies_expression' ||
+    current.parent?.type === 'type_assertion'
+  ) {
+    current = current.parent;
+  }
+
+  return current;
+}
+
+/**
+ * Detects exports that directly declare the function.
+ *
+ * Supported examples:
+ *
+ * export function run() {}
+ * export default function run() {}
+ * export const run = () => {}
+ * export const run = function () {}
+ *
+ * We intentionally do not walk arbitrary ancestors.
+ * Doing so could incorrectly mark a nested callback or
+ * class method as exported merely because its containing
+ * object/class/function is exported.
+ */
+function isExplicitlyExportedFunction(
+  node: Parser.SyntaxNode,
+  language: SupportedLanguage,
+): boolean {
+  if (language === 'python') {
+    return false;
+  }
+
+  const expressionNode = unwrapExpressionParent(node);
+  const parent = expressionNode.parent;
+
+  if (!parent) {
+    return false;
+  }
+
+  /*
+   * export function run() {}
+   * export default function run() {}
+   * export default (() => {})
+   */
+  if (parent.type === 'export_statement') {
+    return true;
+  }
+
+  /*
+   * export const run = () => {};
+   * export const run = function () {};
+   */
+  if (parent.type === 'variable_declarator') {
+    const declaration = parent.parent;
+
+    if (
+      declaration?.type !== 'lexical_declaration' &&
+      declaration?.type !== 'variable_declaration'
+    ) {
+      return false;
+    }
+
+    return declaration.parent?.type === 'export_statement';
+  }
+
+  return false;
+}
+
 export function extractFunctions(
   root: Parser.SyntaxNode,
   source: string,
@@ -151,6 +225,8 @@ export function extractFunctions(
         range: createRange(node),
 
         async: hasAsyncKeyword(node),
+
+        isExported: isExplicitlyExportedFunction(node, language),
       });
     }
 

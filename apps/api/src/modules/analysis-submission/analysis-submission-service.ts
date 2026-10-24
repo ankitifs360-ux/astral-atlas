@@ -9,9 +9,9 @@ import { enqueueAnalysisJob, requeueAnalysisJob } from '../../queues/enqueue-ana
 
 import type { AnalysisQueue } from '../../queues/analysis-queue.js';
 
-import {
+import type {
+  AnalysisSubmissionRecord,
   AnalysisSubmissionStore,
-  type AnalysisSubmissionRecord,
 } from './analysis-submission-store.js';
 
 export interface GitHubSubmissionInput {

@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "benchmark:analysis": "tsx scripts/benchmark-analysis-pipeline.ts"
   },
   "dependencies": {
     "@astral-atlas/database": "workspace:*",
@@ -17,9 +20,11 @@
     "tree-sitter-javascript": "0.23.1",
     "tree-sitter-python": "0.21.0",
     "tree-sitter-typescript": "0.23.2",
+    "yauzl": "3.4.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@types/yauzl": "3.4.0",
     "tsx": "4.23.15",
     "vitest": "5.0.5"
   }

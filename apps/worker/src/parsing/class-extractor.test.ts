@@ -16,7 +16,98 @@ describe('class extraction', () => {
             `,
     });
 
-    expect(result.classes.map((item) => item.name)).toEqual(['UserService', 'Repository']);
+    expect(
+      result.classes.map((item) => ({
+        name: item.name,
+        isExported: item.isExported,
+      })),
+    ).toEqual([
+      {
+        name: 'UserService',
+        isExported: false,
+      },
+      {
+        name: 'Repository',
+        isExported: false,
+      },
+    ]);
+  });
+
+  it('marks directly exported class declarations as exported', () => {
+    const result = parseSource({
+      filePath: 'src/service.ts',
+
+      language: 'typescript',
+
+      source: `
+              export class UserService {}
+
+              export default class AppService {}
+            `,
+    });
+
+    expect(
+      result.classes.map((item) => ({
+        name: item.name,
+        isExported: item.isExported,
+      })),
+    ).toEqual([
+      {
+        name: 'UserService',
+        isExported: true,
+      },
+      {
+        name: 'AppService',
+        isExported: true,
+      },
+    ]);
+  });
+
+  it('marks exported variable-assigned class expressions as exported', () => {
+    const result = parseSource({
+      filePath: 'src/service.ts',
+
+      language: 'typescript',
+
+      source: `
+              export const UserService =
+                class {
+                  run() {}
+                };
+            `,
+    });
+
+    expect(result.classes).toHaveLength(1);
+
+    expect(result.classes[0]).toMatchObject({
+      name: 'UserService',
+
+      isExported: true,
+    });
+  });
+
+  it('does not mark nested classes inside exported functions as exported', () => {
+    const result = parseSource({
+      filePath: 'src/service.ts',
+
+      language: 'typescript',
+
+      source: `
+              export function createService() {
+                class UserService {}
+
+                return UserService;
+              }
+            `,
+    });
+
+    expect(result.classes).toHaveLength(1);
+
+    expect(result.classes[0]).toMatchObject({
+      name: 'UserService',
+
+      isExported: false,
+    });
   });
 
   it('infers a class expression name from a variable', () => {
@@ -33,7 +124,13 @@ describe('class extraction', () => {
             `,
     });
 
-    expect(result.classes.map((item) => item.name)).toEqual(['UserService']);
+    expect(result.classes).toHaveLength(1);
+
+    expect(result.classes[0]).toMatchObject({
+      name: 'UserService',
+
+      isExported: false,
+    });
   });
 
   it('infers a class expression name from direct assignment', () => {
@@ -52,7 +149,13 @@ describe('class extraction', () => {
             `,
     });
 
-    expect(result.classes.map((item) => item.name)).toEqual(['UserService']);
+    expect(result.classes).toHaveLength(1);
+
+    expect(result.classes[0]).toMatchObject({
+      name: 'UserService',
+
+      isExported: false,
+    });
   });
 
   it('infers class names from object property keys', () => {
@@ -72,7 +175,22 @@ describe('class extraction', () => {
             `,
     });
 
-    expect(result.classes.map((item) => item.name)).toEqual(['UserService', 'AdminService']);
+    expect(
+      result.classes.map((item) => ({
+        name: item.name,
+        isExported: item.isExported,
+      })),
+    ).toEqual([
+      {
+        name: 'UserService',
+        isExported: false,
+      },
+
+      {
+        name: 'AdminService',
+        isExported: false,
+      },
+    ]);
   });
 
   it('keeps genuinely anonymous class expressions unnamed', () => {
@@ -92,7 +210,11 @@ describe('class extraction', () => {
 
     expect(result.classes).toHaveLength(1);
 
-    expect(result.classes[0]?.name).toBeNull();
+    expect(result.classes[0]).toMatchObject({
+      name: null,
+
+      isExported: false,
+    });
   });
 
   it('continues extracting Python class names normally', () => {
@@ -110,6 +232,21 @@ class AdminService:
             `,
     });
 
-    expect(result.classes.map((item) => item.name)).toEqual(['UserService', 'AdminService']);
+    expect(
+      result.classes.map((item) => ({
+        name: item.name,
+        isExported: item.isExported,
+      })),
+    ).toEqual([
+      {
+        name: 'UserService',
+        isExported: false,
+      },
+
+      {
+        name: 'AdminService',
+        isExported: false,
+      },
+    ]);
   });
 });

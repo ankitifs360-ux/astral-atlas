@@ -2,10 +2,17 @@ import { existsSync } from 'node:fs';
 import { loadEnvFile } from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { createAnalysisWorker } from './analysis-worker.js';
+import { createDatabase } from '@astral-atlas/database';
+
 import { createAnalysisJobProcessor } from './analysis-processor.js';
+import { createAnalysisWorker } from './analysis-worker.js';
 import { parseWorkerConfig } from './config.js';
+import { NodeRepositorySourcePreparer } from './node-repository-source-preparer.js';
+import { AnalysisStore } from './persistence/analysis-store.js';
 import { createWorkerRedisClient } from './redis.js';
+import { checkoutGitHubCommit } from './worker-git-checkout.js';
+import { loadGitHistoryTouches } from './worker-git-history.js';
+import { extractZipArchive } from './worker-zip-extractor.js';
 
 type LogLevel = 'info' | 'error';
 
@@ -22,6 +29,7 @@ function writeLog(level: LogLevel, message: string, details: Record<string, unkn
 
   if (level === 'error') {
     process.stderr.write(line);
+
     return;
   }
 
@@ -55,19 +63,87 @@ if (existsSync(rootEnvPath)) {
 
 const config = parseWorkerConfig(process.env);
 
+/*
+ * ------------------------------------------------------------------
+ * Infrastructure
+ * ------------------------------------------------------------------
+ */
+
+const database = createDatabase(config.databaseUrl);
+
 const redis = createWorkerRedisClient(config.redis);
 
-const processor = createAnalysisJobProcessor(redis);
+/*
+ * ------------------------------------------------------------------
+ * Persistence
+ * ------------------------------------------------------------------
+ *
+ * Completed analyses are written to PostgreSQL through
+ * AnalysisStore.
+ */
+const analysisStore = new AnalysisStore(database.db);
+
+/*
+ * ------------------------------------------------------------------
+ * Repository preparation
+ * ------------------------------------------------------------------
+ *
+ * The worker owns its Git checkout and ZIP extraction
+ * implementations instead of importing API implementation files.
+ */
+const sourcePreparer = new NodeRepositorySourcePreparer({
+  /*
+   * NodeRepositorySourcePreparer only needs to know that
+   * checkout completed successfully.
+   *
+   * checkoutGitHubCommit also returns the verified SHA,
+   * which has already been checked internally.
+   */
+  checkoutGitHubCommit: async (input) => {
+    await checkoutGitHubCommit(input);
+  },
+
+  extractZipArchive,
+});
+
+/*
+ * ------------------------------------------------------------------
+ * Production analysis processor
+ * ------------------------------------------------------------------
+ *
+ * Supplying dependencies here activates the real analysis pipeline:
+ *
+ * repository preparation
+ * → parsing
+ * → dependency graph
+ * → Git churn
+ * → metrics
+ * → deep analysis
+ * → health score
+ * → onboarding
+ * → PostgreSQL persistence
+ *
+ * ZIP analyses automatically skip Git history because
+ * analysis-processor only requests history for GitHub sources.
+ */
+const processor = createAnalysisJobProcessor(redis, {
+  sourcePreparer,
+
+  analysisStore,
+
+  loadGitHistoryTouches,
+});
 
 const worker = createAnalysisWorker(redis, processor);
+
 /*
  * Attach event listeners BEFORE worker.run().
  *
- * Because analysis-worker.ts uses:
+ * analysis-worker.ts uses:
  *
  * autorun: false
  *
- * no job can start before these listeners
+ * so no job can begin before observability listeners
  * are registered.
  */
 worker.on('active', (job) => {
@@ -111,9 +187,10 @@ worker.on('failed', (job, error) => {
 });
 
 /*
- * A BullMQ Worker must always have an error
- * listener. Otherwise certain connection errors
- * can become unhandled EventEmitter errors.
+ * BullMQ Worker must always have an error listener.
+ *
+ * Otherwise certain Redis/EventEmitter failures may
+ * become unhandled errors.
  */
 worker.on('error', (error) => {
   writeLog('error', 'BullMQ worker error', serializeError(error));
@@ -133,17 +210,26 @@ async function shutdown(reason: NodeJS.Signals | 'STARTUP_FAILURE'): Promise<voi
   });
 
   /*
-   * worker.close() stops taking new jobs and,
-   * by default, waits for the current job to
-   * finish before closing.
+   * Stop accepting new BullMQ jobs first.
+   *
+   * worker.close() waits for the currently running
+   * job to finish by default.
    */
   await worker.close().catch((error: unknown) => {
     writeLog('error', 'Failed to close BullMQ worker cleanly', serializeError(error));
   });
 
   /*
-   * Close the Redis connection only after the
-   * BullMQ worker has stopped using it.
+   * No analysis should be persisting after the
+   * worker has closed, so PostgreSQL can shut down.
+   */
+  await database.close().catch((error: unknown) => {
+    writeLog('error', 'Failed to close PostgreSQL cleanly', serializeError(error));
+  });
+
+  /*
+   * Redis must close after BullMQ because the
+   * worker still depends on it during shutdown.
    */
   if (redis.status === 'ready') {
     await redis.quit().catch((error: unknown) => {
@@ -168,13 +254,19 @@ process.once('SIGTERM', () => {
 
 try {
   /*
-   * Because autorun=false, this is the point at
-   * which the worker actually begins consuming
-   * jobs from Redis.
+   * Fail fast before consuming jobs.
    *
-   * We intentionally do not await run() here:
-   * it remains active for the lifetime of this
-   * worker process.
+   * A worker without PostgreSQL or Redis must not
+   * accept analysis work that it cannot complete.
+   */
+  await Promise.all([database.ping(), redis.ping()]);
+
+  /*
+   * autorun=false means this is the exact point
+   * where BullMQ starts consuming jobs.
+   *
+   * Do not await run() because it stays active for
+   * the process lifetime.
    */
   void worker.run().catch(async (error: unknown) => {
     writeLog('error', 'Analysis worker stopped unexpectedly', serializeError(error));
@@ -190,6 +282,10 @@ try {
     redisPort: config.redis.port,
 
     redisDatabase: config.redis.database,
+
+    database: 'connected',
+
+    gitHistory: 'enabled',
   });
 } catch (error: unknown) {
   writeLog('error', 'Analysis worker failed to start', serializeError(error));
