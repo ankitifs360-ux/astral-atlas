@@ -23,7 +23,8 @@ export type ApiFindingKind =
   | 'large-blast-radius'
   | 'high-fan-in'
   | 'high-fan-out'
-  | 'hotspot';
+  | 'hotspot'
+  | 'god-file-risk';
 
 export type ApiFindingSeverity = 'low' | 'medium' | 'high';
 
@@ -40,6 +41,11 @@ export type ApiOnboardingSignalKind =
   | 'hotspot'
   | 'dependency-cycle'
   | 'dependency-of-previous';
+
+export type ApiNewcomerChangeRiskLevel = 'low' | 'medium' | 'high';
+
+export type ApiNewcomerChangeGuidanceSignalKind =
+  'blast-radius' | 'blast-distance' | 'dependency-cycle' | 'fan-in' | 'architecture-risk';
 
 export type ApiAnalysisSubmissionState = 'cached' | 'existing' | 'created' | 'requeued';
 
@@ -337,6 +343,38 @@ export interface AnalysisPathfinderResponse {
   maxSteps: number;
 
   steps: ApiOnboardingStep[];
+}
+
+export interface ApiNewcomerChangeGuidanceSignal {
+  kind: ApiNewcomerChangeGuidanceSignalKind;
+
+  description: string;
+}
+
+export interface ApiNewcomerChangeGuidanceRecommendation {
+  filePath: string;
+
+  safetyScore: number;
+
+  riskLevel: ApiNewcomerChangeRiskLevel;
+
+  blastRadius: number;
+
+  blastMaxDistance: number;
+
+  reviewFilePaths: string[];
+
+  signals: ApiNewcomerChangeGuidanceSignal[];
+}
+
+export interface AnalysisNewcomerChangeGuidanceResponse {
+  analysisId: string;
+
+  consideredFileCount: number;
+
+  maxRecommendations: number;
+
+  recommendations: ApiNewcomerChangeGuidanceRecommendation[];
 }
 
 export interface ApiErrorResponse {

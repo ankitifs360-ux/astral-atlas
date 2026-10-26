@@ -2,6 +2,8 @@ import { analysisResults, onboardingSteps } from '@astral-atlas/database';
 
 import type { RepositoryHealthScore } from '../health-score/types.js';
 
+import type { GoodFirstTaskResult } from '../onboarding/good-first-task-types.js';
+import type { NewcomerChangeGuidanceResult } from '../onboarding/newcomer-change-guidance-types.js';
 import type { OnboardingPathResult } from '../onboarding/types.js';
 
 import type { RepositoryMetricSummary } from '../metrics/types.js';
@@ -104,7 +106,11 @@ export async function persistAnalysisResult(
 
   onboarding: OnboardingPathResult,
 
+  goodFirstTasks: GoodFirstTaskResult,
+
   fileIdByPath: FileIdByPath,
+
+  newcomerChangeGuidance?: NewcomerChangeGuidanceResult,
 ): Promise<void> {
   /*
    * Validate everything before any result rows are
@@ -133,6 +139,18 @@ export async function persistAnalysisResult(
     onboardingConsideredFileCount: onboarding.consideredFileCount,
 
     onboardingMaxSteps: onboarding.maxSteps,
+
+    goodFirstTaskConsideredFileCount: goodFirstTasks.consideredFileCount,
+
+    goodFirstTaskMaxRecommendations: goodFirstTasks.maxRecommendations,
+
+    ...(newcomerChangeGuidance === undefined
+      ? {}
+      : {
+          newcomerChangeGuidanceConsideredFileCount: newcomerChangeGuidance.consideredFileCount,
+
+          newcomerChangeGuidanceMaxRecommendations: newcomerChangeGuidance.maxRecommendations,
+        }),
   });
 
   /*

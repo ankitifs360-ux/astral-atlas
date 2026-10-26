@@ -389,6 +389,8 @@ describe('Fastify API', () => {
 
           '/api/analyses/{analysisId}/pathfinder': {},
 
+          '/api/analyses/{analysisId}/newcomer-change-guidance': {},
+
           '/api/analyses/{analysisId}/events': {},
         },
       });

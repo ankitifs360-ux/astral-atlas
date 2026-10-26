@@ -1,18 +1,16 @@
 import type Parser from 'tree-sitter';
 
-import type { ParsedImport, SourceRange, SupportedLanguage } from './types.js';
+import type { ParsedImport, ParsedImportBinding, SourceRange, SupportedLanguage } from './types.js';
 
 function createRange(node: Parser.SyntaxNode): SourceRange {
   return {
     start: {
       row: node.startPosition.row,
-
       column: node.startPosition.column,
     },
 
     end: {
       row: node.endPosition.row,
-
       column: node.endPosition.column,
     },
   };
@@ -25,7 +23,6 @@ function getNodeText(node: Parser.SyntaxNode, source: string): string {
 function removeQuotes(value: string): string {
   if (value.length >= 2) {
     const first = value[0];
-
     const last = value[value.length - 1];
 
     if (
@@ -40,11 +37,7 @@ function removeQuotes(value: string): string {
   return value;
 }
 
-function extractStaticString(
-  node: Parser.SyntaxNode | null,
-
-  source: string,
-): string | null {
+function extractStaticString(node: Parser.SyntaxNode | null, source: string): string | null {
   if (!node) {
     return null;
   }
@@ -101,9 +94,139 @@ function getCallArgument(node: Parser.SyntaxNode): Parser.SyntaxNode | null {
   return argumentsNode;
 }
 
+function findNamedChild(node: Parser.SyntaxNode, type: string): Parser.SyntaxNode | null {
+  return node.namedChildren.find((child) => child.type === type) ?? null;
+}
+
+function extractNamedImportBindings(
+  namedImportsNode: Parser.SyntaxNode,
+  source: string,
+): ParsedImportBinding[] {
+  const bindings: ParsedImportBinding[] = [];
+
+  for (const specifier of namedImportsNode.namedChildren) {
+    if (specifier.type !== 'import_specifier') {
+      continue;
+    }
+
+    const nameNode = specifier.childForFieldName('name') ?? specifier.namedChildren[0] ?? null;
+
+    if (!nameNode) {
+      continue;
+    }
+
+    const aliasNode = specifier.childForFieldName('alias') ?? specifier.namedChildren[1] ?? null;
+
+    const importedName = getNodeText(nameNode, source);
+    const localName = aliasNode ? getNodeText(aliasNode, source) : importedName;
+
+    if (importedName.length === 0 || localName.length === 0) {
+      continue;
+    }
+
+    bindings.push({
+      kind: 'named',
+      importedName,
+      localName,
+    });
+  }
+
+  return bindings;
+}
+
+function extractNamespaceImportBinding(
+  namespaceNode: Parser.SyntaxNode,
+  source: string,
+): ParsedImportBinding | null {
+  const localNode =
+    namespaceNode.childForFieldName('name') ??
+    namespaceNode.namedChildren.find((child) => child.type === 'identifier') ??
+    null;
+
+  if (!localNode) {
+    return null;
+  }
+
+  const localName = getNodeText(localNode, source);
+
+  if (localName.length === 0) {
+    return null;
+  }
+
+  return {
+    kind: 'namespace',
+    importedName: null,
+    localName,
+  };
+}
+
+function extractJavaScriptLikeImportBindings(
+  node: Parser.SyntaxNode,
+  source: string,
+): ParsedImportBinding[] {
+  const importClause = findNamedChild(node, 'import_clause');
+
+  /*
+   * Side-effect-only import:
+   *
+   * import './setup.js';
+   */
+  if (!importClause) {
+    return [];
+  }
+
+  const bindings: ParsedImportBinding[] = [];
+
+  /*
+   * Direct identifier children of import_clause represent
+   * default imports:
+   *
+   * import express from 'express';
+   *
+   * For combined imports:
+   *
+   * import express, { Router } from 'express';
+   *
+   * `express` remains the direct identifier while the
+   * named imports live inside `named_imports`.
+   */
+  const defaultBindingNode = importClause.namedChildren.find(
+    (child) => child.type === 'identifier',
+  );
+
+  if (defaultBindingNode) {
+    const localName = getNodeText(defaultBindingNode, source);
+
+    if (localName.length > 0) {
+      bindings.push({
+        kind: 'default',
+        importedName: null,
+        localName,
+      });
+    }
+  }
+
+  const namedImportsNode = findNamedChild(importClause, 'named_imports');
+
+  if (namedImportsNode) {
+    bindings.push(...extractNamedImportBindings(namedImportsNode, source));
+  }
+
+  const namespaceNode = findNamedChild(importClause, 'namespace_import');
+
+  if (namespaceNode) {
+    const namespaceBinding = extractNamespaceImportBinding(namespaceNode, source);
+
+    if (namespaceBinding) {
+      bindings.push(namespaceBinding);
+    }
+  }
+
+  return bindings;
+}
+
 function extractJavaScriptLikeDependency(
   node: Parser.SyntaxNode,
-
   source: string,
 ): ParsedImport | null {
   /*
@@ -114,17 +237,18 @@ function extractJavaScriptLikeDependency(
    */
   if (node.type === 'import_statement') {
     const sourceNode = node.childForFieldName('source');
-
     const importSource = extractStaticString(sourceNode, source);
 
     if (!importSource) {
       return null;
     }
 
+    const bindings = extractJavaScriptLikeImportBindings(node, source);
+
     return {
       source: importSource,
-
       range: createRange(node),
+      ...(bindings.length > 0 ? { bindings } : {}),
     };
   }
 
@@ -138,10 +262,13 @@ function extractJavaScriptLikeDependency(
    * export * from './types.js';
    *
    * These are dependency edges too.
+   *
+   * Re-export bindings are intentionally not treated as
+   * local import bindings because they do not introduce
+   * callable names into the current module scope.
    */
   if (node.type === 'export_statement') {
     const sourceNode = node.childForFieldName('source');
-
     const importSource = extractStaticString(sourceNode, source);
 
     if (!importSource) {
@@ -150,7 +277,6 @@ function extractJavaScriptLikeDependency(
 
     return {
       source: importSource,
-
       range: createRange(node),
     };
   }
@@ -192,7 +318,6 @@ function extractJavaScriptLikeDependency(
   }
 
   const argument = getCallArgument(node);
-
   const importSource = extractStaticString(argument, source);
 
   /*
@@ -210,16 +335,11 @@ function extractJavaScriptLikeDependency(
 
   return {
     source: importSource,
-
     range: createRange(node),
   };
 }
 
-function extractPythonDependencies(
-  node: Parser.SyntaxNode,
-
-  source: string,
-): ParsedImport[] {
+function extractPythonDependencies(node: Parser.SyntaxNode, source: string): ParsedImport[] {
   if (node.type === 'import_statement') {
     const imports: ParsedImport[] = [];
 
@@ -240,7 +360,6 @@ function extractPythonDependencies(
 
       imports.push({
         source: getNodeText(importNode, source),
-
         range: createRange(importNode),
       });
     }
@@ -258,7 +377,6 @@ function extractPythonDependencies(
     return [
       {
         source: getNodeText(moduleNode, source),
-
         range: createRange(node),
       },
     ];
@@ -269,9 +387,7 @@ function extractPythonDependencies(
 
 export function extractImports(
   root: Parser.SyntaxNode,
-
   source: string,
-
   language: SupportedLanguage,
 ): ParsedImport[] {
   const imports: ParsedImport[] = [];

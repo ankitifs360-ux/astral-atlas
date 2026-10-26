@@ -7,7 +7,9 @@ import {
   edges,
   eq,
   files,
+  goodFirstTaskRecommendations,
   metrics,
+  newcomerChangeGuidanceRecommendations,
   onboardingSteps,
   repositories,
   symbols,
@@ -18,6 +20,15 @@ import type { Database } from '@astral-atlas/database';
 import type { AnalysisFinding } from '../deep-analysis/types.js';
 import type { RepositoryHealthScore } from '../health-score/types.js';
 import type { RepositoryMetricSummary } from '../metrics/types.js';
+import type {
+  GoodFirstTaskResult,
+  GoodFirstTaskSignal,
+} from '../onboarding/good-first-task-types.js';
+import type {
+  NewcomerChangeGuidanceResult,
+  NewcomerChangeGuidanceSignal,
+  NewcomerChangeRiskLevel,
+} from '../onboarding/newcomer-change-guidance-types.js';
 import type { OnboardingPathResult, OnboardingSignal } from '../onboarding/types.js';
 
 import { persistCompletedAnalysis } from './completed-analysis-persistence.js';
@@ -154,6 +165,10 @@ export interface StoredCompletedAnalysis {
   findings: AnalysisFinding[];
 
   onboarding: OnboardingPathResult;
+
+  goodFirstTasks: GoodFirstTaskResult;
+
+  newcomerChangeGuidance: NewcomerChangeGuidanceResult;
 }
 
 function validateAnalysisId(analysisId: string): void {
@@ -180,6 +195,14 @@ function requireJson<T>(value: unknown, label: string): T {
   }
 
   return value as T;
+}
+
+function requireNewcomerChangeRiskLevel(value: string): NewcomerChangeRiskLevel {
+  if (value === 'low' || value === 'medium' || value === 'high') {
+    return value;
+  }
+
+  throw new Error(`Stored newcomer change guidance has invalid risk level "${value}"`);
 }
 
 function requireFilePath(
@@ -340,6 +363,16 @@ export class AnalysisStore {
         onboardingConsideredFileCount: analysisResults.onboardingConsideredFileCount,
 
         onboardingMaxSteps: analysisResults.onboardingMaxSteps,
+
+        goodFirstTaskConsideredFileCount: analysisResults.goodFirstTaskConsideredFileCount,
+
+        goodFirstTaskMaxRecommendations: analysisResults.goodFirstTaskMaxRecommendations,
+
+        newcomerChangeGuidanceConsideredFileCount:
+          analysisResults.newcomerChangeGuidanceConsideredFileCount,
+
+        newcomerChangeGuidanceMaxRecommendations:
+          analysisResults.newcomerChangeGuidanceMaxRecommendations,
       })
       .from(analysisResults)
       .where(eq(analysisResults.analysisId, analysisId))
@@ -746,6 +779,139 @@ export class AnalysisStore {
     };
 
     /*
+     * ---------------------------------------------------------------
+     * 8. Good-first-task recommendations
+     * ---------------------------------------------------------------
+     */
+    const goodFirstTaskRows = await this.database
+      .select({
+        recommendationRank: goodFirstTaskRecommendations.recommendationRank,
+
+        fileId: goodFirstTaskRecommendations.fileId,
+
+        score: goodFirstTaskRecommendations.score,
+
+        architectureRiskScore: goodFirstTaskRecommendations.architectureRiskScore,
+
+        signals: goodFirstTaskRecommendations.signals,
+      })
+      .from(goodFirstTaskRecommendations)
+      .where(eq(goodFirstTaskRecommendations.analysisId, analysisId));
+
+    const goodFirstTasks: GoodFirstTaskResult = {
+      recommendations: goodFirstTaskRows
+        .map((recommendation) => ({
+          recommendationRank: recommendation.recommendationRank,
+
+          filePath: requireFilePath(
+            filePathById,
+            recommendation.fileId,
+            'Good-first-task recommendation',
+          ),
+
+          score: recommendation.score,
+
+          architectureRiskScore: recommendation.architectureRiskScore,
+
+          signals: requireJson<GoodFirstTaskSignal[]>(
+            recommendation.signals,
+            `signals for good-first-task recommendation ${recommendation.recommendationRank}`,
+          ),
+        }))
+        .sort((left, right) => left.recommendationRank - right.recommendationRank)
+        .map((recommendation) => ({
+          filePath: recommendation.filePath,
+
+          score: recommendation.score,
+
+          architectureRiskScore: recommendation.architectureRiskScore,
+
+          signals: recommendation.signals,
+        })),
+
+      consideredFileCount: result.goodFirstTaskConsideredFileCount,
+
+      maxRecommendations: result.goodFirstTaskMaxRecommendations,
+    };
+
+    /*
+     * ---------------------------------------------------------------
+     * 9. Blast-radius-aware newcomer change guidance
+     * ---------------------------------------------------------------
+     */
+    const newcomerChangeGuidanceRows = await this.database
+      .select({
+        recommendationRank: newcomerChangeGuidanceRecommendations.recommendationRank,
+
+        fileId: newcomerChangeGuidanceRecommendations.fileId,
+
+        safetyScore: newcomerChangeGuidanceRecommendations.safetyScore,
+
+        riskLevel: newcomerChangeGuidanceRecommendations.riskLevel,
+
+        blastRadius: newcomerChangeGuidanceRecommendations.blastRadius,
+
+        blastMaxDistance: newcomerChangeGuidanceRecommendations.blastMaxDistance,
+
+        reviewFilePaths: newcomerChangeGuidanceRecommendations.reviewFilePaths,
+
+        signals: newcomerChangeGuidanceRecommendations.signals,
+      })
+      .from(newcomerChangeGuidanceRecommendations)
+      .where(eq(newcomerChangeGuidanceRecommendations.analysisId, analysisId));
+
+    const newcomerChangeGuidance: NewcomerChangeGuidanceResult = {
+      recommendations: newcomerChangeGuidanceRows
+        .map((recommendation) => ({
+          recommendationRank: recommendation.recommendationRank,
+
+          filePath: requireFilePath(
+            filePathById,
+            recommendation.fileId,
+            'Newcomer change guidance recommendation',
+          ),
+
+          safetyScore: recommendation.safetyScore,
+
+          riskLevel: requireNewcomerChangeRiskLevel(recommendation.riskLevel),
+
+          blastRadius: recommendation.blastRadius,
+
+          blastMaxDistance: recommendation.blastMaxDistance,
+
+          reviewFilePaths: requireJson<string[]>(
+            recommendation.reviewFilePaths,
+            `review file paths for newcomer change guidance recommendation ${recommendation.recommendationRank}`,
+          ),
+
+          signals: requireJson<NewcomerChangeGuidanceSignal[]>(
+            recommendation.signals,
+            `signals for newcomer change guidance recommendation ${recommendation.recommendationRank}`,
+          ),
+        }))
+        .sort((left, right) => left.recommendationRank - right.recommendationRank)
+        .map((recommendation) => ({
+          filePath: recommendation.filePath,
+
+          safetyScore: recommendation.safetyScore,
+
+          riskLevel: recommendation.riskLevel,
+
+          blastRadius: recommendation.blastRadius,
+
+          blastMaxDistance: recommendation.blastMaxDistance,
+
+          reviewFilePaths: recommendation.reviewFilePaths,
+
+          signals: recommendation.signals,
+        })),
+
+      consideredFileCount: result.newcomerChangeGuidanceConsideredFileCount,
+
+      maxRecommendations: result.newcomerChangeGuidanceMaxRecommendations,
+    };
+
+    /*
      * analyzedFileCount is already represented by the
      * repository metrics summary, so we reconstruct it
      * rather than storing the same number twice.
@@ -794,6 +960,10 @@ export class AnalysisStore {
       findings: storedFindings,
 
       onboarding,
+
+      goodFirstTasks,
+
+      newcomerChangeGuidance,
     };
   }
 }

@@ -58,6 +58,8 @@ function createResult(filePath: string): ParseSourceResult {
 
     classes: [],
 
+    calls: [],
+
     hasSyntaxErrors: false,
   };
 }

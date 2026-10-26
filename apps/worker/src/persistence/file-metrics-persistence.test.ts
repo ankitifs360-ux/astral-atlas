@@ -163,6 +163,22 @@ function createInput(
 
       maxSteps: 10,
     },
+
+    goodFirstTasks: {
+      recommendations: [],
+
+      consideredFileCount: metricFiles.length,
+
+      maxRecommendations: 5,
+    },
+
+    newcomerChangeGuidance: {
+      recommendations: [],
+
+      consideredFileCount: metricFiles.length,
+
+      maxRecommendations: 5,
+    },
   };
 }
 
@@ -387,7 +403,39 @@ describe('persistFilesAndMetrics', () => {
         inDependencyCycle: true,
 
         cyclicComponentSize: 2,
+
+        riskScore: null,
       },
+    ]);
+  });
+
+  it('persists the B15.4 architecture risk score', async () => {
+    const input = createInput();
+
+    input.architectureRiskScores = [
+      {
+        filePath: 'src/server.ts',
+
+        riskScore: 84,
+      },
+    ];
+
+    const { transaction, inserts } = createTransaction([
+      {
+        id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+
+        path: 'src/server.ts',
+      },
+    ]);
+
+    await persistFilesAndMetrics(transaction, input);
+
+    const metricInsert = inserts.find((insert) => insert.table === metrics);
+
+    expect(metricInsert?.values).toEqual([
+      expect.objectContaining({
+        riskScore: 84,
+      }),
     ]);
   });
 
@@ -584,6 +632,108 @@ describe('persistFilesAndMetrics', () => {
 
     await expect(persistFilesAndMetrics(transaction, input)).rejects.toThrow(
       'Duplicate file metrics for "src/server.ts"',
+    );
+
+    expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate architecture risk scores for the same file', async () => {
+    const input = createInput();
+
+    input.architectureRiskScores = [
+      {
+        filePath: 'src/server.ts',
+
+        riskScore: 25,
+      },
+
+      {
+        filePath: 'src/server.ts',
+
+        riskScore: 60,
+      },
+    ];
+
+    const { transaction, insertSpy } = createTransaction([]);
+
+    await expect(persistFilesAndMetrics(transaction, input)).rejects.toThrow(
+      'Duplicate architecture risk score for "src/server.ts"',
+    );
+
+    expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects architecture risk scores below zero', async () => {
+    const input = createInput();
+
+    input.architectureRiskScores = [
+      {
+        filePath: 'src/server.ts',
+
+        riskScore: -1,
+      },
+    ];
+
+    const { transaction, insertSpy } = createTransaction([]);
+
+    await expect(persistFilesAndMetrics(transaction, input)).rejects.toThrow(
+      'Architecture risk score for "src/server.ts" must be between 0 and 100',
+    );
+
+    expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects architecture risk scores above 100', async () => {
+    const input = createInput();
+
+    input.architectureRiskScores = [
+      {
+        filePath: 'src/server.ts',
+
+        riskScore: 101,
+      },
+    ];
+
+    const { transaction, insertSpy } = createTransaction([]);
+
+    await expect(persistFilesAndMetrics(transaction, input)).rejects.toThrow(
+      'Architecture risk score for "src/server.ts" must be between 0 and 100',
+    );
+
+    expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects an architecture risk score for a file without persisted metrics', async () => {
+    const input = createInput();
+
+    input.files = [
+      ...input.files,
+
+      {
+        filePath: 'src/unsupported.txt',
+
+        language: 'unknown',
+
+        sizeBytes: 20,
+
+        isSupported: false,
+
+        parseStatus: 'unsupported',
+      },
+    ];
+
+    input.architectureRiskScores = [
+      {
+        filePath: 'src/unsupported.txt',
+
+        riskScore: 25,
+      },
+    ];
+
+    const { transaction, insertSpy } = createTransaction([]);
+
+    await expect(persistFilesAndMetrics(transaction, input)).rejects.toThrow(
+      'Architecture risk score references file without persisted metrics "src/unsupported.txt"',
     );
 
     expect(insertSpy).not.toHaveBeenCalled();

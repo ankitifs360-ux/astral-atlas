@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import type {
   AnalysisFileDetailResponse,
   AnalysisGraphResponse,
+  AnalysisNewcomerChangeGuidanceResponse,
   AnalysisPathfinderResponse,
 } from '@astral-atlas/shared';
 
@@ -38,6 +39,10 @@ export interface AnalysisResultsReader {
   getFileDetail(analysisId: string, fileId: string): Promise<AnalysisFileDetailResponse | null>;
 
   getPathfinder(analysisId: string): Promise<AnalysisPathfinderResponse | null>;
+
+  getNewcomerChangeGuidance(
+    analysisId: string,
+  ): Promise<AnalysisNewcomerChangeGuidanceResponse | null>;
 }
 
 function notFoundBody(message: string) {
@@ -107,6 +112,26 @@ export function registerAnalysisResultsRoutes(
     },
     async (request, reply) => {
       const result = await resultsStore.getPathfinder(request.params.analysisId);
+
+      if (result === null) {
+        return reply.code(404).send(notFoundBody('Completed analysis was not found.'));
+      }
+
+      return reply.send(result);
+    },
+  );
+
+  app.get<{
+    Params: AnalysisIdParams;
+  }>(
+    '/api/analyses/:analysisId/newcomer-change-guidance',
+    {
+      schema: {
+        params: AnalysisIdParamsSchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await resultsStore.getNewcomerChangeGuidance(request.params.analysisId);
 
       if (result === null) {
         return reply.code(404).send(notFoundBody('Completed analysis was not found.'));

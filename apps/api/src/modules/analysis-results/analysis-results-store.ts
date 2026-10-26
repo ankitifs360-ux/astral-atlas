@@ -8,6 +8,7 @@ import {
   eq,
   files,
   metrics,
+  newcomerChangeGuidanceRecommendations,
   onboardingSteps,
   sql,
   symbols,
@@ -17,6 +18,7 @@ import type { Database } from '@astral-atlas/database';
 import type {
   AnalysisFileDetailResponse,
   AnalysisGraphResponse,
+  AnalysisNewcomerChangeGuidanceResponse,
   AnalysisPathfinderResponse,
   ApiAnalysisMetadata,
   ApiFinding,
@@ -24,6 +26,8 @@ import type {
   ApiGraphEdge,
   ApiGraphNode,
   ApiHealthDimension,
+  ApiNewcomerChangeGuidanceSignal,
+  ApiNewcomerChangeRiskLevel,
   ApiOnboardingSignal,
   ApiRepositoryHealth,
   ApiRepositorySummary,
@@ -190,6 +194,24 @@ function mapEvidence(value: unknown, findingKey: string): ApiFindingEvidence[] {
 
 function mapSignals(value: unknown, order: number): ApiOnboardingSignal[] {
   return requireJson<ApiOnboardingSignal[]>(value, `signals for onboarding step ${order}`);
+}
+
+function mapNewcomerChangeGuidanceSignals(
+  value: unknown,
+  rank: number,
+): ApiNewcomerChangeGuidanceSignal[] {
+  return requireJson<ApiNewcomerChangeGuidanceSignal[]>(
+    value,
+    `signals for newcomer change guidance recommendation ${rank}`,
+  );
+}
+
+function requireNewcomerChangeRiskLevel(value: string): ApiNewcomerChangeRiskLevel {
+  if (value === 'low' || value === 'medium' || value === 'high') {
+    return value;
+  }
+
+  throw new Error(`Stored newcomer change guidance has invalid risk level "${value}"`);
 }
 
 export class AnalysisResultsStore {
@@ -630,6 +652,113 @@ export class AnalysisResultsStore {
           signals: mapSignals(step.signals, step.order),
         }))
         .sort((left, right) => left.order - right.order),
+    };
+  }
+
+  public async getNewcomerChangeGuidance(
+    analysisId: string,
+  ): Promise<AnalysisNewcomerChangeGuidanceResponse | null> {
+    const normalizedAnalysisId = validateAnalysisId(analysisId);
+
+    const completedRows = await this.database
+      .select({
+        id: analyses.id,
+      })
+      .from(analyses)
+      .where(and(eq(analyses.id, normalizedAnalysisId), eq(analyses.status, 'completed')))
+      .limit(1);
+
+    if (completedRows[0] === undefined) {
+      return null;
+    }
+
+    const resultRows = await this.database
+      .select({
+        consideredFileCount: analysisResults.newcomerChangeGuidanceConsideredFileCount,
+
+        maxRecommendations: analysisResults.newcomerChangeGuidanceMaxRecommendations,
+      })
+      .from(analysisResults)
+      .where(eq(analysisResults.analysisId, normalizedAnalysisId))
+      .limit(1);
+
+    const result = resultRows[0];
+
+    if (result === undefined) {
+      throw new Error(
+        `Completed analysis "${normalizedAnalysisId}" is missing its analysis result`,
+      );
+    }
+
+    const recommendationRows = await this.database
+      .select({
+        recommendationRank: newcomerChangeGuidanceRecommendations.recommendationRank,
+
+        filePath: files.path,
+
+        safetyScore: newcomerChangeGuidanceRecommendations.safetyScore,
+
+        riskLevel: newcomerChangeGuidanceRecommendations.riskLevel,
+
+        blastRadius: newcomerChangeGuidanceRecommendations.blastRadius,
+
+        blastMaxDistance: newcomerChangeGuidanceRecommendations.blastMaxDistance,
+
+        reviewFilePaths: newcomerChangeGuidanceRecommendations.reviewFilePaths,
+
+        signals: newcomerChangeGuidanceRecommendations.signals,
+      })
+      .from(newcomerChangeGuidanceRecommendations)
+      .innerJoin(files, eq(newcomerChangeGuidanceRecommendations.fileId, files.id))
+      .where(eq(newcomerChangeGuidanceRecommendations.analysisId, normalizedAnalysisId));
+
+    return {
+      analysisId: normalizedAnalysisId,
+
+      consideredFileCount: result.consideredFileCount,
+
+      maxRecommendations: result.maxRecommendations,
+
+      recommendations: recommendationRows
+        .map((recommendation) => ({
+          recommendationRank: recommendation.recommendationRank,
+
+          filePath: recommendation.filePath,
+
+          safetyScore: recommendation.safetyScore,
+
+          riskLevel: requireNewcomerChangeRiskLevel(recommendation.riskLevel),
+
+          blastRadius: recommendation.blastRadius,
+
+          blastMaxDistance: recommendation.blastMaxDistance,
+
+          reviewFilePaths: requireJson<string[]>(
+            recommendation.reviewFilePaths,
+            `review file paths for newcomer change guidance recommendation ${recommendation.recommendationRank}`,
+          ),
+
+          signals: mapNewcomerChangeGuidanceSignals(
+            recommendation.signals,
+            recommendation.recommendationRank,
+          ),
+        }))
+        .sort((left, right) => left.recommendationRank - right.recommendationRank)
+        .map((recommendation) => ({
+          filePath: recommendation.filePath,
+
+          safetyScore: recommendation.safetyScore,
+
+          riskLevel: recommendation.riskLevel,
+
+          blastRadius: recommendation.blastRadius,
+
+          blastMaxDistance: recommendation.blastMaxDistance,
+
+          reviewFilePaths: recommendation.reviewFilePaths,
+
+          signals: recommendation.signals,
+        })),
     };
   }
 }

@@ -50,6 +50,8 @@ describe('resolveRepositoryImports', () => {
 
         classes: [],
 
+        calls: [],
+
         hasSyntaxErrors: false,
       },
 
@@ -63,6 +65,8 @@ describe('resolveRepositoryImports', () => {
         functions: [],
 
         classes: [],
+
+        calls: [],
 
         hasSyntaxErrors: false,
       },
@@ -90,6 +94,8 @@ describe('resolveRepositoryImports', () => {
 
         classes: [],
 
+        calls: [],
+
         hasSyntaxErrors: false,
       },
 
@@ -103,6 +109,8 @@ describe('resolveRepositoryImports', () => {
         functions: [],
 
         classes: [],
+
+        calls: [],
 
         hasSyntaxErrors: false,
       },
@@ -205,6 +213,8 @@ describe('resolveRepositoryImports', () => {
 
         classes: [],
 
+        calls: [],
+
         hasSyntaxErrors: false,
       },
 
@@ -218,6 +228,8 @@ describe('resolveRepositoryImports', () => {
         functions: [],
 
         classes: [],
+
+        calls: [],
 
         hasSyntaxErrors: false,
       },
@@ -255,6 +267,8 @@ describe('resolveRepositoryImports', () => {
 
         classes: [],
 
+        calls: [],
+
         hasSyntaxErrors: false,
       },
 
@@ -269,6 +283,8 @@ describe('resolveRepositoryImports', () => {
 
         classes: [],
 
+        calls: [],
+
         hasSyntaxErrors: false,
       },
 
@@ -282,6 +298,8 @@ describe('resolveRepositoryImports', () => {
         functions: [],
 
         classes: [],
+
+        calls: [],
 
         hasSyntaxErrors: false,
       },

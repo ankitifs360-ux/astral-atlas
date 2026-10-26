@@ -13,7 +13,7 @@
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
+    "test": "vitest run --fileParallelism --exclude 'apps/worker/src/analysis-processor.test.ts' && vitest run apps/worker/src/analysis-processor.test.ts",
     "test:watch": "vitest",
     "env:check": "tsx scripts/validate-env.ts",
     "infra:up": "docker compose up -d --wait",

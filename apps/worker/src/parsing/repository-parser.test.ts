@@ -34,6 +34,8 @@ function createParseResult(request: ParseSourceRequest): ParseSourceResult {
 
     classes: [],
 
+    calls: [],
+
     hasSyntaxErrors: false,
   };
 }

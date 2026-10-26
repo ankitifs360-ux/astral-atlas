@@ -18,9 +18,13 @@ import { parseRepositoryFiles } from '../parsing/repository-parser.js';
 
 import { analyzeRepositoryDeeply } from './repository-deep-analysis.js';
 
+import { DEFAULT_GOD_FILE_RISK_THRESHOLDS } from './god-file-risk-thresholds.js';
+
 import { DEFAULT_DEEP_ANALYSIS_THRESHOLDS } from './thresholds.js';
 
 import type { AnalysisFindingSeverity } from './types.js';
+
+import type { GodFileRiskThresholds } from './god-file-risk-thresholds.js';
 
 import type { DeepAnalysisThresholds } from './thresholds.js';
 
@@ -387,7 +391,62 @@ export function start() {
     };
 
     /*
-     * B9:
+     * B15.3:
+     *
+     * Lower only the god-file thresholds for this
+     * tiny integration repository.
+     *
+     * core.ts activates:
+     *
+     * - functionCount
+     * - cyclomaticComplexity
+     *
+     * service.ts and entry.ts activate only the
+     * function-count signal, so they must not be
+     * classified as god-file risks.
+     */
+    const godFileRiskThresholds: GodFileRiskThresholds = {
+      ...DEFAULT_GOD_FILE_RISK_THRESHOLDS,
+
+      functionCount: {
+        medium: 1,
+
+        high: 2,
+      },
+
+      classCount: {
+        medium: 10,
+
+        high: 20,
+      },
+
+      cyclomaticComplexity: {
+        medium: 2,
+
+        high: 4,
+      },
+
+      fanOut: {
+        medium: 3,
+
+        high: 5,
+      },
+
+      changedCommitCount: {
+        medium: 4,
+
+        high: 6,
+      },
+
+      signalCount: {
+        medium: 2,
+
+        high: 4,
+      },
+    };
+
+    /*
+     * B9 + B15.3:
      * Turn B8 facts + B7 graph information
      * into explainable findings/hotspots.
      */
@@ -397,6 +456,8 @@ export function start() {
       graphAnalysis,
 
       thresholds,
+
+      godFileRiskThresholds,
     });
 
     const findingKinds = new Set(deepAnalysis.findings.map((finding) => finding.kind));
@@ -411,8 +472,54 @@ export function start() {
         'high-fan-in',
         'high-fan-out',
         'hotspot',
+        'god-file-risk',
       ]),
     );
+
+    /*
+     * B15.3:
+     *
+     * Real parser + graph + metric output for
+     * core.ts must produce exactly one
+     * explainable god-file-risk finding.
+     */
+    const godFileRiskFindings = deepAnalysis.findings.filter(
+      (finding) => finding.kind === 'god-file-risk',
+    );
+
+    expect(godFileRiskFindings).toHaveLength(1);
+
+    expect(godFileRiskFindings[0]).toMatchObject({
+      severity: 'medium',
+
+      filePaths: ['src/core.ts'],
+    });
+
+    expect(godFileRiskFindings[0]?.evidence).toEqual([
+      {
+        metric: 'godFileRiskSignalCount',
+
+        value: 2,
+
+        threshold: 2,
+      },
+
+      {
+        metric: 'functionCount',
+
+        value: 1,
+
+        threshold: 1,
+      },
+
+      {
+        metric: 'cyclomaticComplexity',
+
+        value: 2,
+
+        threshold: 2,
+      },
+    ]);
 
     /*
      * The missing relative import produces

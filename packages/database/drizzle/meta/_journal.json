@@ -22,6 +22,27 @@
       "when": 1792709458733,
       "tag": "0002_add_file_source_content",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792709458734,
+      "tag": "0003_add_god_file_risk_finding_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792709458735,
+      "tag": "0004_add_good_first_task_recommendations",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792709458736,
+      "tag": "0005_add_newcomer_change_guidance",
+      "breakpoints": true
     }
   ]
 }

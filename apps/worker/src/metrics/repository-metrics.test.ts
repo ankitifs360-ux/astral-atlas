@@ -64,6 +64,8 @@ function createParsedFile(
       }),
     ),
 
+    calls: [],
+
     hasSyntaxErrors: options.hasSyntaxErrors ?? false,
   };
 }

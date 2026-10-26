@@ -509,13 +509,21 @@ describe('createAnalysisJobProcessor full pipeline', () => {
 
           graphAnalysis: expect.any(Object),
 
+          resolvedCalls: expect.any(Array),
+
           metrics: expect.any(Object),
+
+          architectureRiskScores: expect.any(Array),
 
           findings: expect.any(Array),
 
           healthScore: expect.any(Object),
 
           onboarding: expect.any(Object),
+
+          goodFirstTasks: expect.any(Object),
+
+          newcomerChangeGuidance: expect.any(Object),
         }),
       );
 
@@ -523,6 +531,79 @@ describe('createAnalysisJobProcessor full pipeline', () => {
         'src/app.ts',
         'src/helper.ts',
       ]);
+
+      expect(persistenceInput?.architectureRiskScores).toEqual([
+        {
+          filePath: 'src/app.ts',
+
+          riskScore: expect.any(Number),
+        },
+
+        {
+          filePath: 'src/helper.ts',
+
+          riskScore: expect.any(Number),
+        },
+      ]);
+
+      for (const risk of persistenceInput?.architectureRiskScores ?? []) {
+        expect(risk.riskScore).toBeGreaterThanOrEqual(0);
+
+        expect(risk.riskScore).toBeLessThanOrEqual(100);
+      }
+
+      expect(persistenceInput?.goodFirstTasks.consideredFileCount).toBe(2);
+
+      expect(persistenceInput?.goodFirstTasks.maxRecommendations).toBe(5);
+
+      expect(
+        persistenceInput?.goodFirstTasks.recommendations.map(
+          (recommendation) => recommendation.filePath,
+        ),
+      ).toEqual(['src/app.ts', 'src/helper.ts']);
+
+      for (const recommendation of persistenceInput?.goodFirstTasks.recommendations ?? []) {
+        expect(recommendation.score).toBeGreaterThanOrEqual(0);
+
+        expect(recommendation.score).toBeLessThanOrEqual(100);
+
+        expect(recommendation.architectureRiskScore).toBeGreaterThanOrEqual(0);
+
+        expect(recommendation.architectureRiskScore).toBeLessThanOrEqual(100);
+      }
+
+      expect(persistenceInput?.newcomerChangeGuidance?.consideredFileCount).toBe(2);
+
+      expect(persistenceInput?.newcomerChangeGuidance?.maxRecommendations).toBe(5);
+
+      expect(
+        persistenceInput?.newcomerChangeGuidance?.recommendations.map(
+          (recommendation) => recommendation.filePath,
+        ),
+      ).toEqual(['src/app.ts', 'src/helper.ts']);
+
+      for (const recommendation of persistenceInput?.newcomerChangeGuidance?.recommendations ??
+        []) {
+        expect(recommendation.safetyScore).toBeGreaterThanOrEqual(0);
+
+        expect(recommendation.safetyScore).toBeLessThanOrEqual(100);
+
+        expect(['low', 'medium', 'high']).toContain(recommendation.riskLevel);
+
+        expect(recommendation.blastRadius).toBeGreaterThanOrEqual(0);
+
+        expect(recommendation.blastMaxDistance).toBeGreaterThanOrEqual(0);
+
+        expect(recommendation.reviewFilePaths).toEqual(expect.any(Array));
+
+        expect(recommendation.signals).toEqual(expect.any(Array));
+      }
+
+      const helperChangeGuidance = persistenceInput?.newcomerChangeGuidance?.recommendations.find(
+        (recommendation) => recommendation.filePath === 'src/helper.ts',
+      );
+
+      expect(helperChangeGuidance?.reviewFilePaths).toEqual(['src/app.ts']);
 
       expect(persistenceInput?.files).toEqual(
         expect.arrayContaining([
@@ -602,6 +683,38 @@ describe('createAnalysisJobProcessor full pipeline', () => {
       expect(persistenceInput?.graphAnalysis.graph.nodes).toHaveLength(2);
 
       expect(persistenceInput?.graphAnalysis.graph.edges.length).toBeGreaterThanOrEqual(1);
+
+      /*
+       * B15 function-call resolution must survive the complete:
+       *
+       * Tree-sitter parsing
+       *   -> import binding extraction
+       *   -> repository call resolution
+       *   -> analysis processor
+       *   -> persistence payload
+       *
+       * The fixture contains:
+       *
+       * src/app.ts:runApp()
+       *   -> src/helper.ts:helper()
+       */
+      expect(persistenceInput?.resolvedCalls).toHaveLength(1);
+
+      expect(persistenceInput?.resolvedCalls?.[0]).toMatchObject({
+        sourceFilePath: 'src/app.ts',
+
+        callee: 'helper',
+
+        kind: 'internal',
+
+        targetFilePath: 'src/helper.ts',
+
+        reason: null,
+      });
+
+      expect(persistenceInput?.resolvedCalls?.[0]?.sourceFunction.name).toBe('runApp');
+
+      expect(persistenceInput?.resolvedCalls?.[0]?.targetFunction?.name).toBe('helper');
 
       expect(repository.cleanup).toHaveBeenCalledTimes(1);
 

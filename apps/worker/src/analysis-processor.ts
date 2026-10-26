@@ -16,6 +16,7 @@ import type { Redis } from 'ioredis';
 
 import { acquireAnalysisLock, ANALYSIS_LOCK_RENEW_INTERVAL_MS } from './analysis-lock.js';
 
+import { calculateFileArchitectureRiskScores } from './deep-analysis/architecture-risk-score.js';
 import { analyzeRepositoryDeeply } from './deep-analysis/repository-deep-analysis.js';
 
 import { buildRepositoryGraph } from './graph/repository-graph.js';
@@ -29,6 +30,8 @@ import {
 
 import { calculateRepositoryMetrics } from './metrics/repository-metrics.js';
 
+import { scoreGoodFirstTasks } from './onboarding/good-first-task-scorer.js';
+import { scoreNewcomerChangeGuidance } from './onboarding/newcomer-change-guidance-scorer.js';
 import { buildRepositoryOnboardingPath } from './onboarding/repository-onboarding.js';
 
 import { ParserThreadPool } from './parsing/parser-thread-pool.js';
@@ -48,6 +51,8 @@ import type { AnalysisStore } from './persistence/analysis-store.js';
 import type { PersistAnalysisSymbolInput } from './persistence/symbol-persistence.js';
 
 import type { PersistAnalysisFileInput } from './persistence/types.js';
+
+import { resolveRepositoryFunctionCalls } from './resolution/repository-function-call-resolver.js';
 
 import {
   getAnalysisSourceRevision,
@@ -550,6 +555,13 @@ async function processRepositoryAnalysis(
 
     /*
      * ---------------------------------------------------------------
+     * B15: function-level call resolution
+     * ---------------------------------------------------------------
+     */
+    const functionCallResolution = resolveRepositoryFunctionCalls(parsed.parsed);
+
+    /*
+     * ---------------------------------------------------------------
      * B8: structure + optional Git churn metrics
      * ---------------------------------------------------------------
      */
@@ -600,6 +612,20 @@ async function processRepositoryAnalysis(
 
     /*
      * ---------------------------------------------------------------
+     * B15.4: heatmap-ready per-file architecture risk
+     * ---------------------------------------------------------------
+     *
+     * Deep-analysis findings are converted into normalized
+     * 0..100 scores for every analyzed metric file.
+     */
+    const architectureRiskScores = calculateFileArchitectureRiskScores(
+      metrics.files.map((file) => file.filePath),
+
+      deepAnalysis.findings,
+    );
+
+    /*
+     * ---------------------------------------------------------------
      * B10: repository health
      * ---------------------------------------------------------------
      *
@@ -627,6 +653,37 @@ async function processRepositoryAnalysis(
       metrics,
 
       deepAnalysis,
+    });
+
+    /*
+     * ---------------------------------------------------------------
+     * B15.5: smart good-first-task recommendations
+     * ---------------------------------------------------------------
+     *
+     * Prefer files that are useful enough to provide
+     * repository context while avoiding excessive
+     * complexity, coupling and architecture risk.
+     */
+    const goodFirstTasks = scoreGoodFirstTasks({
+      metrics,
+
+      architectureRiskScores,
+    });
+
+    /*
+     * ---------------------------------------------------------------
+     * B15.6: blast-radius-aware newcomer change guidance
+     * ---------------------------------------------------------------
+     *
+     * Recommend safer change surfaces and identify nearby/transitive
+     * dependents that a newcomer should review before editing a file.
+     */
+    const newcomerChangeGuidance = scoreNewcomerChangeGuidance({
+      metrics,
+
+      graph: graphAnalysis.graph,
+
+      architectureRiskScores,
     });
 
     /*
@@ -676,13 +733,21 @@ async function processRepositoryAnalysis(
 
       graphAnalysis,
 
+      resolvedCalls: functionCallResolution.calls,
+
       metrics,
+
+      architectureRiskScores,
 
       findings: deepAnalysis.findings,
 
       healthScore,
 
       onboarding,
+
+      goodFirstTasks,
+
+      newcomerChangeGuidance,
     });
 
     return createCompletedResult(data.analysisId);

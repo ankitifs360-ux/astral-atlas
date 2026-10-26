@@ -3,6 +3,8 @@ import JavaScript from 'tree-sitter-javascript';
 import Python from 'tree-sitter-python';
 import TypeScript from 'tree-sitter-typescript';
 
+import { extractCalls } from './call-extractor.js';
+
 import { extractClasses } from './class-extractor.js';
 
 import { extractFunctions } from './function-extractor.js';
@@ -52,6 +54,8 @@ export function parseSource(request: ParseSourceRequest): ParseSourceResult {
 
   const classes = extractClasses(tree.rootNode, request.source, request.language);
 
+  const calls = extractCalls(tree.rootNode, request.source, request.language);
+
   return {
     filePath: request.filePath,
 
@@ -62,6 +66,8 @@ export function parseSource(request: ParseSourceRequest): ParseSourceResult {
     functions,
 
     classes,
+
+    calls,
 
     hasSyntaxErrors: tree.rootNode.hasError,
   };

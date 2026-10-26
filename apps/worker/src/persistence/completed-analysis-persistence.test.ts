@@ -10,6 +10,12 @@ import { persistAnalysisFindings } from './finding-persistence.js';
 
 import { persistFilesAndMetrics } from './file-metrics-persistence.js';
 
+import { persistFunctionCallEdges } from './function-call-edge-persistence.js';
+
+import { persistGoodFirstTaskRecommendations } from './good-first-task-persistence.js';
+
+import { persistNewcomerChangeGuidanceRecommendations } from './newcomer-change-guidance-persistence.js';
+
 import { persistAnalysisResult } from './result-persistence.js';
 
 import { persistAnalysisSymbols } from './symbol-persistence.js';
@@ -24,8 +30,20 @@ vi.mock('./edge-persistence.js', () => ({
   persistGraphEdges: vi.fn(),
 }));
 
+vi.mock('./function-call-edge-persistence.js', () => ({
+  persistFunctionCallEdges: vi.fn(),
+}));
+
 vi.mock('./finding-persistence.js', () => ({
   persistAnalysisFindings: vi.fn(),
+}));
+
+vi.mock('./good-first-task-persistence.js', () => ({
+  persistGoodFirstTaskRecommendations: vi.fn(),
+}));
+
+vi.mock('./newcomer-change-guidance-persistence.js', () => ({
+  persistNewcomerChangeGuidanceRecommendations: vi.fn(),
 }));
 
 vi.mock('./result-persistence.js', () => ({
@@ -401,6 +419,54 @@ function createInput(): PersistCompletedAnalysisInput {
 
       maxSteps: 10,
     },
+
+    goodFirstTasks: {
+      recommendations: [
+        {
+          filePath: 'src/service.ts',
+
+          score: 85,
+
+          architectureRiskScore: 25,
+
+          signals: [],
+        },
+      ],
+
+      consideredFileCount: 2,
+
+      maxRecommendations: 5,
+    },
+
+    newcomerChangeGuidance: {
+      recommendations: [
+        {
+          filePath: 'src/service.ts',
+
+          safetyScore: 80,
+
+          riskLevel: 'low',
+
+          blastRadius: 1,
+
+          blastMaxDistance: 1,
+
+          reviewFilePaths: ['src/server.ts'],
+
+          signals: [
+            {
+              kind: 'blast-radius',
+
+              description: 'One dependent file should be reviewed before changing this file.',
+            },
+          ],
+        },
+      ],
+
+      consideredFileCount: 2,
+
+      maxRecommendations: 5,
+    },
   };
 }
 
@@ -504,7 +570,13 @@ describe('persistCompletedAnalysis', () => {
 
     vi.mocked(persistGraphEdges).mockReset();
 
+    vi.mocked(persistFunctionCallEdges).mockReset();
+
     vi.mocked(persistAnalysisFindings).mockReset();
+
+    vi.mocked(persistGoodFirstTaskRecommendations).mockReset();
+
+    vi.mocked(persistNewcomerChangeGuidanceRecommendations).mockReset();
 
     vi.mocked(persistAnalysisResult).mockReset();
 
@@ -522,11 +594,17 @@ describe('persistCompletedAnalysis', () => {
 
     vi.mocked(persistGraphEdges).mockResolvedValue(1);
 
+    vi.mocked(persistFunctionCallEdges).mockResolvedValue(0);
+
     vi.mocked(persistAnalysisFindings).mockResolvedValue(
       new Map([['finding:test', 'cccccccc-cccc-cccc-cccc-cccccccccccc']]),
     );
 
     vi.mocked(persistAnalysisResult).mockResolvedValue();
+
+    vi.mocked(persistGoodFirstTaskRecommendations).mockResolvedValue(1);
+
+    vi.mocked(persistNewcomerChangeGuidanceRecommendations).mockResolvedValue(1);
   });
 
   it('persists every stage in the required order', async () => {
@@ -554,6 +632,12 @@ describe('persistCompletedAnalysis', () => {
       return 1;
     });
 
+    vi.mocked(persistFunctionCallEdges).mockImplementation(async () => {
+      order.push('call-edges');
+
+      return 0;
+    });
+
     vi.mocked(persistAnalysisFindings).mockImplementation(async () => {
       order.push('findings');
 
@@ -562,6 +646,18 @@ describe('persistCompletedAnalysis', () => {
 
     vi.mocked(persistAnalysisResult).mockImplementation(async () => {
       order.push('result');
+    });
+
+    vi.mocked(persistGoodFirstTaskRecommendations).mockImplementation(async () => {
+      order.push('good-first-tasks');
+
+      return 1;
+    });
+
+    vi.mocked(persistNewcomerChangeGuidanceRecommendations).mockImplementation(async () => {
+      order.push('newcomer-change-guidance');
+
+      return 1;
     });
 
     const { database } = createFakeDatabase({
@@ -575,8 +671,11 @@ describe('persistCompletedAnalysis', () => {
       'files-metrics',
       'symbols',
       'edges',
+      'call-edges',
       'findings',
       'result',
+      'good-first-tasks',
+      'newcomer-change-guidance',
       'mark-completed',
     ]);
   });
@@ -591,6 +690,8 @@ describe('persistCompletedAnalysis', () => {
      */
     vi.mocked(persistGraphEdges).mockResolvedValue(7);
 
+    vi.mocked(persistFunctionCallEdges).mockResolvedValue(3);
+
     const { database } = createFakeDatabase();
 
     const result = await persistCompletedAnalysis(database, createInput());
@@ -602,7 +703,7 @@ describe('persistCompletedAnalysis', () => {
 
       persistedSymbolCount: 0,
 
-      persistedEdgeCount: 7,
+      persistedEdgeCount: 10,
 
       persistedFindingCount: 1,
 
@@ -621,11 +722,17 @@ describe('persistCompletedAnalysis', () => {
 
     const fileMap = vi.mocked(persistFilesAndMetrics).mock.results[0]?.value;
 
+    const symbolMap = vi.mocked(persistAnalysisSymbols).mock.results[0]?.value;
+
     expect(fileMap).toBeDefined();
+
+    expect(symbolMap).toBeDefined();
 
     const symbolCall = vi.mocked(persistAnalysisSymbols).mock.calls[0];
 
     const edgeCall = vi.mocked(persistGraphEdges).mock.calls[0];
+
+    const callEdgeCall = vi.mocked(persistFunctionCallEdges).mock.calls[0];
 
     const findingCall = vi.mocked(persistAnalysisFindings).mock.calls[0];
 
@@ -633,13 +740,21 @@ describe('persistCompletedAnalysis', () => {
 
     const resolvedMap = await fileMap;
 
+    const resolvedSymbolMap = await symbolMap;
+
     expect(symbolCall?.[2]).toBe(resolvedMap);
 
     expect(edgeCall?.[3]).toBe(resolvedMap);
 
+    expect(callEdgeCall?.[2]).toEqual([]);
+
+    expect(callEdgeCall?.[3]).toBe(resolvedMap);
+
+    expect(callEdgeCall?.[4]).toBe(resolvedSymbolMap);
+
     expect(findingCall?.[3]).toBe(resolvedMap);
 
-    expect(resultCall?.[5]).toBe(resolvedMap);
+    expect(resultCall?.[6]).toBe(resolvedMap);
   });
 
   it('marks the analysis completed only after all persistence stages succeed', async () => {
@@ -681,6 +796,8 @@ describe('persistCompletedAnalysis', () => {
 
     expect(persistGraphEdges).not.toHaveBeenCalled();
 
+    expect(persistFunctionCallEdges).not.toHaveBeenCalled();
+
     expect(persistAnalysisFindings).not.toHaveBeenCalled();
 
     expect(persistAnalysisResult).not.toHaveBeenCalled();
@@ -717,6 +834,8 @@ describe('persistCompletedAnalysis', () => {
 
     expect(persistGraphEdges).not.toHaveBeenCalled();
 
+    expect(persistFunctionCallEdges).not.toHaveBeenCalled();
+
     expect(persistAnalysisFindings).not.toHaveBeenCalled();
 
     expect(persistAnalysisResult).not.toHaveBeenCalled();
@@ -737,6 +856,8 @@ describe('persistCompletedAnalysis', () => {
 
     expect(persistGraphEdges).not.toHaveBeenCalled();
 
+    expect(persistFunctionCallEdges).not.toHaveBeenCalled();
+
     expect(persistAnalysisFindings).not.toHaveBeenCalled();
 
     expect(persistAnalysisResult).not.toHaveBeenCalled();
@@ -755,6 +876,8 @@ describe('persistCompletedAnalysis', () => {
 
     expect(persistGraphEdges).not.toHaveBeenCalled();
 
+    expect(persistFunctionCallEdges).not.toHaveBeenCalled();
+
     expect(persistAnalysisFindings).not.toHaveBeenCalled();
 
     expect(persistAnalysisResult).not.toHaveBeenCalled();
@@ -769,6 +892,26 @@ describe('persistCompletedAnalysis', () => {
 
     await expect(persistCompletedAnalysis(database, createInput())).rejects.toThrow(
       'edge persistence failed',
+    );
+
+    expect(persistFunctionCallEdges).not.toHaveBeenCalled();
+
+    expect(persistAnalysisFindings).not.toHaveBeenCalled();
+
+    expect(persistAnalysisResult).not.toHaveBeenCalled();
+
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not continue after function call edge persistence fails', async () => {
+    vi.mocked(persistFunctionCallEdges).mockRejectedValue(
+      new Error('function call edge persistence failed'),
+    );
+
+    const { database, updateSpy } = createFakeDatabase();
+
+    await expect(persistCompletedAnalysis(database, createInput())).rejects.toThrow(
+      'function call edge persistence failed',
     );
 
     expect(persistAnalysisFindings).not.toHaveBeenCalled();
@@ -800,6 +943,38 @@ describe('persistCompletedAnalysis', () => {
     await expect(persistCompletedAnalysis(database, createInput())).rejects.toThrow(
       'result persistence failed',
     );
+
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not mark the analysis completed when good-first-task persistence fails', async () => {
+    vi.mocked(persistGoodFirstTaskRecommendations).mockRejectedValue(
+      new Error('good-first-task persistence failed'),
+    );
+
+    const { database, updateSpy } = createFakeDatabase();
+
+    await expect(persistCompletedAnalysis(database, createInput())).rejects.toThrow(
+      'good-first-task persistence failed',
+    );
+
+    expect(persistAnalysisResult).toHaveBeenCalledTimes(1);
+
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not mark the analysis completed when newcomer change guidance persistence fails', async () => {
+    vi.mocked(persistNewcomerChangeGuidanceRecommendations).mockRejectedValue(
+      new Error('newcomer change guidance persistence failed'),
+    );
+
+    const { database, updateSpy } = createFakeDatabase();
+
+    await expect(persistCompletedAnalysis(database, createInput())).rejects.toThrow(
+      'newcomer change guidance persistence failed',
+    );
+
+    expect(persistGoodFirstTaskRecommendations).toHaveBeenCalledTimes(1);
 
     expect(updateSpy).not.toHaveBeenCalled();
   });

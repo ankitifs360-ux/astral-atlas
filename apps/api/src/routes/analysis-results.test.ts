@@ -142,6 +142,56 @@ function createPathfinderResponse(): AnalysisPathfinderResponse {
   };
 }
 
+function createNewcomerChangeGuidanceResponse() {
+  return {
+    analysisId: ANALYSIS_ID,
+
+    consideredFileCount: 2,
+
+    maxRecommendations: 5,
+
+    recommendations: [
+      {
+        filePath: 'src/server.ts',
+
+        safetyScore: 100,
+
+        riskLevel: 'low' as const,
+
+        blastRadius: 0,
+
+        blastMaxDistance: 0,
+
+        reviewFilePaths: [],
+
+        signals: [],
+      },
+
+      {
+        filePath: 'src/service.ts',
+
+        safetyScore: 65,
+
+        riskLevel: 'medium' as const,
+
+        blastRadius: 1,
+
+        blastMaxDistance: 1,
+
+        reviewFilePaths: ['src/server.ts'],
+
+        signals: [
+          {
+            kind: 'blast-radius' as const,
+
+            description: 'One dependent file should be reviewed before changing this file.',
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function createReader(overrides: Partial<AnalysisResultsReader> = {}): AnalysisResultsReader {
   return {
     getGraph: vi.fn(async () => createGraphResponse()),
@@ -149,6 +199,8 @@ function createReader(overrides: Partial<AnalysisResultsReader> = {}): AnalysisR
     getFileDetail: vi.fn(async () => createFileDetailResponse()),
 
     getPathfinder: vi.fn(async () => createPathfinderResponse()),
+
+    getNewcomerChangeGuidance: vi.fn(async () => createNewcomerChangeGuidanceResponse()),
 
     ...overrides,
   };
@@ -220,6 +272,28 @@ describe('analysis results routes', () => {
 
       expect(reader.getPathfinder).toHaveBeenCalledTimes(1);
       expect(reader.getPathfinder).toHaveBeenCalledWith(ANALYSIS_ID);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('returns newcomer change guidance', async () => {
+    const reader = createReader();
+    const app = await createApp(reader);
+
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/analyses/${ANALYSIS_ID}/newcomer-change-guidance`,
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      expect(response.json()).toEqual(createNewcomerChangeGuidanceResponse());
+
+      expect(reader.getNewcomerChangeGuidance).toHaveBeenCalledTimes(1);
+
+      expect(reader.getNewcomerChangeGuidance).toHaveBeenCalledWith(ANALYSIS_ID);
     } finally {
       await app.close();
     }
@@ -303,6 +377,37 @@ describe('analysis results routes', () => {
     }
   });
 
+  it('returns 404 when newcomer change guidance is unavailable', async () => {
+    const reader = createReader({
+      getNewcomerChangeGuidance: vi.fn(async () => null),
+    });
+
+    const app = await createApp(reader);
+
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/analyses/${ANALYSIS_ID}/newcomer-change-guidance`,
+      });
+
+      expect(response.statusCode).toBe(404);
+
+      expect(response.json()).toEqual({
+        error: {
+          code: 'NOT_FOUND',
+
+          message: 'Completed analysis was not found.',
+        },
+      });
+
+      expect(reader.getNewcomerChangeGuidance).toHaveBeenCalledTimes(1);
+
+      expect(reader.getNewcomerChangeGuidance).toHaveBeenCalledWith(ANALYSIS_ID);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('rejects invalid UUID route parameters before calling the reader', async () => {
     const reader = createReader();
     const app = await createApp(reader);
@@ -315,6 +420,15 @@ describe('analysis results routes', () => {
 
       expect(invalidAnalysisResponse.statusCode).toBe(400);
       expect(reader.getGraph).not.toHaveBeenCalled();
+
+      const invalidGuidanceResponse = await app.inject({
+        method: 'GET',
+        url: '/api/analyses/not-a-uuid/newcomer-change-guidance',
+      });
+
+      expect(invalidGuidanceResponse.statusCode).toBe(400);
+
+      expect(reader.getNewcomerChangeGuidance).not.toHaveBeenCalled();
 
       const invalidFileResponse = await app.inject({
         method: 'GET',

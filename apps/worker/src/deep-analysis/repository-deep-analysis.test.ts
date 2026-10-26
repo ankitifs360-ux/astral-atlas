@@ -290,6 +290,7 @@ describe('analyzeRepositoryDeeply', () => {
         'high-fan-in',
         'high-fan-out',
         'hotspot',
+        'god-file-risk',
       ]),
     );
   });

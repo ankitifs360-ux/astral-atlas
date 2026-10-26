@@ -2,6 +2,10 @@ import { findDependencyCycles } from './dependency-cycle-rule.js';
 
 import { findHighChurnFiles } from './high-churn-rule.js';
 
+import { findGodFileRisks } from './god-file-risk-rule.js';
+
+import type { GodFileRiskThresholds } from './god-file-risk-thresholds.js';
+
 import { findHighComplexityFiles } from './high-complexity-rule.js';
 
 import { findHighFanInFiles } from './high-fan-in-rule.js';
@@ -34,6 +38,8 @@ export interface RepositoryDeepAnalysisInput {
   graphAnalysis: RepositoryGraphAnalysis;
 
   thresholds?: DeepAnalysisThresholds;
+
+  godFileRiskThresholds?: GodFileRiskThresholds;
 }
 
 export function analyzeRepositoryDeeply(input: RepositoryDeepAnalysisInput): DeepAnalysisResult {
@@ -67,6 +73,12 @@ export function analyzeRepositoryDeeply(input: RepositoryDeepAnalysisInput): Dee
     ...findHighFanInFiles(input.metrics, thresholds),
 
     ...findHighFanOutFiles(input.metrics, thresholds),
+
+    ...findGodFileRisks(
+      input.metrics,
+
+      input.godFileRiskThresholds,
+    ),
 
     ...findDependencyCycles(input.graphAnalysis.cycles),
 

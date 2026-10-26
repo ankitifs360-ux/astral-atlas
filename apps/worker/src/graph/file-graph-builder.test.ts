@@ -34,6 +34,8 @@ function createParsedFile(
 
     classes: [],
 
+    calls: [],
+
     hasSyntaxErrors: false,
   };
 }

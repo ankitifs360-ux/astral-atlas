@@ -172,6 +172,36 @@ function createOnboarding(): OnboardingPathResult {
   };
 }
 
+function createGoodFirstTasks() {
+  return {
+    recommendations: [
+      {
+        filePath: 'src/server.ts',
+
+        score: 85,
+
+        architectureRiskScore: 25,
+
+        signals: [],
+      },
+
+      {
+        filePath: 'src/core.ts',
+
+        score: 70,
+
+        architectureRiskScore: 60,
+
+        signals: [],
+      },
+    ],
+
+    consideredFileCount: 2,
+
+    maxRecommendations: 5,
+  };
+}
+
 function requireOnboardingStep(
   onboarding: OnboardingPathResult,
   index: number,
@@ -254,7 +284,17 @@ describe('persistAnalysisResult', () => {
       repositorySummary,
       healthScore,
       onboarding,
+      createGoodFirstTasks(),
+
       createFileIdByPath(),
+
+      {
+        recommendations: [],
+
+        consideredFileCount: 2,
+
+        maxRecommendations: 5,
+      },
     );
 
     /*
@@ -279,6 +319,14 @@ describe('persistAnalysisResult', () => {
       onboardingConsideredFileCount: 2,
 
       onboardingMaxSteps: 10,
+
+      goodFirstTaskConsideredFileCount: 2,
+
+      goodFirstTaskMaxRecommendations: 5,
+
+      newcomerChangeGuidanceConsideredFileCount: 2,
+
+      newcomerChangeGuidanceMaxRecommendations: 5,
     });
   });
 
@@ -291,6 +339,8 @@ describe('persistAnalysisResult', () => {
       createRepositorySummary(),
       createHealthScore(),
       createOnboarding(),
+      createGoodFirstTasks(),
+
       createFileIdByPath(),
     );
 
@@ -354,6 +404,8 @@ describe('persistAnalysisResult', () => {
       createRepositorySummary(),
       createHealthScore(),
       onboarding,
+      createGoodFirstTasks(),
+
       createFileIdByPath(),
     );
 
@@ -385,6 +437,8 @@ describe('persistAnalysisResult', () => {
       createRepositorySummary(),
       createHealthScore(),
       onboarding,
+      createGoodFirstTasks(),
+
       new Map(),
     );
 
@@ -423,6 +477,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         healthScore,
         createOnboarding(),
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Repository health score must be an integer between 0 and 100');
@@ -444,6 +500,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         healthScore,
         createOnboarding(),
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Repository health score must be an integer between 0 and 100');
@@ -465,6 +523,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         healthScore,
         createOnboarding(),
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Repository health score must be an integer between 0 and 100');
@@ -486,6 +546,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         healthScore,
         createOnboarding(),
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Repository health score does not match the sum of dimension scores');
@@ -511,6 +573,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         createHealthScore(),
         onboarding,
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Onboarding step references unknown persisted file "src/missing.ts"');
@@ -536,6 +600,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         createHealthScore(),
         onboarding,
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Duplicate onboarding step order 1');
@@ -561,6 +627,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         createHealthScore(),
         onboarding,
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Duplicate onboarding file path "src/server.ts"');
@@ -586,6 +654,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         createHealthScore(),
         onboarding,
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Onboarding step orders must be sequential starting at 1');
@@ -611,6 +681,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         createHealthScore(),
         onboarding,
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Onboarding step order must be a positive integer, received 0');
@@ -636,6 +708,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         createHealthScore(),
         onboarding,
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Onboarding score for "src/server.ts" must be a non-negative integer');
@@ -657,6 +731,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         createHealthScore(),
         onboarding,
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('Onboarding path contains more steps than maxSteps');
@@ -678,6 +754,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         createHealthScore(),
         onboarding,
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('onboarding.consideredFileCount must be a non-negative integer');
@@ -699,6 +777,8 @@ describe('persistAnalysisResult', () => {
         createRepositorySummary(),
         createHealthScore(),
         onboarding,
+        createGoodFirstTasks(),
+
         createFileIdByPath(),
       ),
     ).rejects.toThrow('onboarding.maxSteps must be a positive integer');

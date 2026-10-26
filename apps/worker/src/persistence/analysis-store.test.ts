@@ -356,6 +356,14 @@ describe('AnalysisStore', () => {
         onboardingConsideredFileCount: 2,
 
         onboardingMaxSteps: 10,
+
+        goodFirstTaskConsideredFileCount: 2,
+
+        goodFirstTaskMaxRecommendations: 5,
+
+        newcomerChangeGuidanceConsideredFileCount: 2,
+
+        newcomerChangeGuidanceMaxRecommendations: 5,
       };
 
       /*
@@ -631,6 +639,101 @@ describe('AnalysisStore', () => {
         },
       ];
 
+      const goodFirstTaskRows = [
+        {
+          recommendationRank: 2,
+
+          fileId: SERVICE_FILE_ID,
+
+          score: 70,
+
+          architectureRiskScore: 84,
+
+          signals: [
+            {
+              kind: 'architecture-risk' as const,
+
+              impact: 'penalty' as const,
+
+              points: 20,
+
+              description: 'Higher architecture risk reduces first-task suitability.',
+            },
+          ],
+        },
+
+        {
+          recommendationRank: 1,
+
+          fileId: SERVER_FILE_ID,
+
+          score: 85,
+
+          architectureRiskScore: 25,
+
+          signals: [
+            {
+              kind: 'architecture-risk' as const,
+
+              impact: 'penalty' as const,
+
+              points: 10,
+
+              description: 'Moderate architecture risk reduces first-task suitability.',
+            },
+          ],
+        },
+      ];
+
+      /*
+       * Intentionally return B15.6 recommendations out of rank order.
+       *
+       * AnalysisStore must restore recommendationRank ordering.
+       */
+      const newcomerChangeGuidanceRows = [
+        {
+          recommendationRank: 2,
+
+          fileId: SERVICE_FILE_ID,
+
+          safetyScore: 65,
+
+          riskLevel: 'medium',
+
+          blastRadius: 1,
+
+          blastMaxDistance: 1,
+
+          reviewFilePaths: ['src/server.ts'],
+
+          signals: [
+            {
+              kind: 'blast-radius',
+
+              description: 'One dependent file should be reviewed before changing this file.',
+            },
+          ],
+        },
+
+        {
+          recommendationRank: 1,
+
+          fileId: SERVER_FILE_ID,
+
+          safetyScore: 100,
+
+          riskLevel: 'low',
+
+          blastRadius: 0,
+
+          blastMaxDistance: 0,
+
+          reviewFilePaths: [],
+
+          signals: [],
+        },
+      ];
+
       const { database, selectSpy } = createFakeDatabase([
         [analysisRow],
 
@@ -647,13 +750,17 @@ describe('AnalysisStore', () => {
         findingFileRows,
 
         onboardingRows,
+
+        goodFirstTaskRows,
+
+        newcomerChangeGuidanceRows,
       ]);
 
       const store = new AnalysisStore(database);
 
       const stored = await store.getCompletedById(ANALYSIS_ID);
 
-      expect(selectSpy).toHaveBeenCalledTimes(8);
+      expect(selectSpy).toHaveBeenCalledTimes(10);
 
       expect(stored).not.toBeNull();
 
@@ -891,6 +998,99 @@ describe('AnalysisStore', () => {
           },
         ],
       });
+
+      expect(stored?.goodFirstTasks).toEqual({
+        consideredFileCount: 2,
+
+        maxRecommendations: 5,
+
+        recommendations: [
+          {
+            filePath: 'src/server.ts',
+
+            score: 85,
+
+            architectureRiskScore: 25,
+
+            signals: [
+              {
+                kind: 'architecture-risk',
+
+                impact: 'penalty',
+
+                points: 10,
+
+                description: 'Moderate architecture risk reduces first-task suitability.',
+              },
+            ],
+          },
+
+          {
+            filePath: 'src/service.ts',
+
+            score: 70,
+
+            architectureRiskScore: 84,
+
+            signals: [
+              {
+                kind: 'architecture-risk',
+
+                impact: 'penalty',
+
+                points: 20,
+
+                description: 'Higher architecture risk reduces first-task suitability.',
+              },
+            ],
+          },
+        ],
+      });
+      expect(stored?.newcomerChangeGuidance).toEqual({
+        consideredFileCount: 2,
+
+        maxRecommendations: 5,
+
+        recommendations: [
+          {
+            filePath: 'src/server.ts',
+
+            safetyScore: 100,
+
+            riskLevel: 'low',
+
+            blastRadius: 0,
+
+            blastMaxDistance: 0,
+
+            reviewFilePaths: [],
+
+            signals: [],
+          },
+
+          {
+            filePath: 'src/service.ts',
+
+            safetyScore: 65,
+
+            riskLevel: 'medium',
+
+            blastRadius: 1,
+
+            blastMaxDistance: 1,
+
+            reviewFilePaths: ['src/server.ts'],
+
+            signals: [
+              {
+                kind: 'blast-radius',
+
+                description: 'One dependent file should be reviewed before changing this file.',
+              },
+            ],
+          },
+        ],
+      });
     });
 
     it('supports files without a persisted metric row', async () => {
@@ -924,6 +1124,14 @@ describe('AnalysisStore', () => {
             onboardingConsideredFileCount: 1,
 
             onboardingMaxSteps: 10,
+
+            goodFirstTaskConsideredFileCount: 1,
+
+            goodFirstTaskMaxRecommendations: 5,
+
+            newcomerChangeGuidanceConsideredFileCount: 1,
+
+            newcomerChangeGuidanceMaxRecommendations: 5,
           },
         ],
 
@@ -994,6 +1202,10 @@ describe('AnalysisStore', () => {
         [],
 
         [],
+
+        [],
+
+        [],
       ]);
 
       const store = new AnalysisStore(database);
@@ -1013,6 +1225,21 @@ describe('AnalysisStore', () => {
       ]);
 
       expect(stored?.symbols).toEqual([]);
+
+      expect(stored?.goodFirstTasks).toEqual({
+        recommendations: [],
+
+        consideredFileCount: 1,
+
+        maxRecommendations: 5,
+      });
+      expect(stored?.newcomerChangeGuidance).toEqual({
+        recommendations: [],
+
+        consideredFileCount: 1,
+
+        maxRecommendations: 5,
+      });
     });
 
     it('rejects a symbol that references a file outside the stored analysis', async () => {

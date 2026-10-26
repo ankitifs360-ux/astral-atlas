@@ -8,7 +8,9 @@ import {
   edges,
   eq,
   files,
+  goodFirstTaskRecommendations,
   metrics,
+  newcomerChangeGuidanceRecommendations,
   onboardingSteps,
   repositories,
   symbols,
@@ -199,6 +201,28 @@ function createInput(analysisId: string): PersistCompletedAnalysisInput {
 
         complexity: 3,
       },
+
+      {
+        filePath: 'src/service.ts',
+
+        kind: 'function',
+
+        name: 'runService',
+
+        qualifiedName: 'runService',
+
+        startLine: 22,
+
+        startColumn: 0,
+
+        endLine: 26,
+
+        endColumn: 1,
+
+        isExported: true,
+
+        complexity: 2,
+      },
     ],
 
     graphAnalysis: {
@@ -264,6 +288,80 @@ function createInput(analysisId: string): PersistCompletedAnalysisInput {
 
       cycles: [],
     },
+
+    resolvedCalls: [
+      {
+        sourceFilePath: 'src/server.ts',
+
+        sourceLanguage: 'typescript',
+
+        sourceFunction: {
+          name: 'startServer',
+
+          range: {
+            start: {
+              row: 0,
+
+              column: 0,
+            },
+
+            end: {
+              row: 9,
+
+              column: 1,
+            },
+          },
+
+          async: false,
+
+          isExported: true,
+        },
+
+        callee: 'runService',
+
+        range: {
+          start: {
+            row: 4,
+
+            column: 2,
+          },
+
+          end: {
+            row: 4,
+
+            column: 14,
+          },
+        },
+
+        kind: 'internal',
+
+        targetFilePath: 'src/service.ts',
+
+        targetFunction: {
+          name: 'runService',
+
+          range: {
+            start: {
+              row: 21,
+
+              column: 0,
+            },
+
+            end: {
+              row: 25,
+
+              column: 1,
+            },
+          },
+
+          async: false,
+
+          isExported: true,
+        },
+
+        reason: null,
+      },
+    ],
 
     metrics: {
       summary: {
@@ -377,6 +475,20 @@ function createInput(analysisId: string): PersistCompletedAnalysisInput {
       ],
     },
 
+    architectureRiskScores: [
+      {
+        filePath: 'src/server.ts',
+
+        riskScore: 25,
+      },
+
+      {
+        filePath: 'src/service.ts',
+
+        riskScore: 84,
+      },
+    ],
+
     findings: [
       {
         id: 'finding:integration-high-fan-in',
@@ -394,6 +506,46 @@ function createInput(analysisId: string): PersistCompletedAnalysisInput {
         evidence: [
           {
             metric: 'fanIn',
+
+            value: 1,
+
+            threshold: 1,
+          },
+        ],
+      },
+
+      {
+        id: 'finding:integration-god-file-risk',
+
+        kind: 'god-file-risk',
+
+        severity: 'medium',
+
+        title: 'God-file risk detected in src/service.ts',
+
+        description: 'The service file combines multiple structural and dependency risk signals.',
+
+        filePaths: ['src/service.ts'],
+
+        evidence: [
+          {
+            metric: 'godFileRiskSignalCount',
+
+            value: 2,
+
+            threshold: 2,
+          },
+
+          {
+            metric: 'functionCount',
+
+            value: 2,
+
+            threshold: 2,
+          },
+
+          {
+            metric: 'fanOut',
 
             value: 1,
 
@@ -516,6 +668,100 @@ function createInput(analysisId: string): PersistCompletedAnalysisInput {
 
       maxSteps: 10,
     },
+
+    goodFirstTasks: {
+      recommendations: [
+        {
+          filePath: 'src/server.ts',
+
+          score: 85,
+
+          architectureRiskScore: 25,
+
+          signals: [
+            {
+              kind: 'architecture-risk',
+
+              impact: 'penalty',
+
+              points: 10,
+
+              description: 'Moderate architecture risk reduces first-task suitability.',
+            },
+          ],
+        },
+
+        {
+          filePath: 'src/service.ts',
+
+          score: 70,
+
+          architectureRiskScore: 84,
+
+          signals: [
+            {
+              kind: 'architecture-risk',
+
+              impact: 'penalty',
+
+              points: 20,
+
+              description: 'Higher architecture risk reduces first-task suitability.',
+            },
+          ],
+        },
+      ],
+
+      consideredFileCount: 2,
+
+      maxRecommendations: 5,
+    },
+
+    newcomerChangeGuidance: {
+      recommendations: [
+        {
+          filePath: 'src/server.ts',
+
+          safetyScore: 100,
+
+          riskLevel: 'low',
+
+          blastRadius: 0,
+
+          blastMaxDistance: 0,
+
+          reviewFilePaths: [],
+
+          signals: [],
+        },
+
+        {
+          filePath: 'src/service.ts',
+
+          safetyScore: 65,
+
+          riskLevel: 'medium',
+
+          blastRadius: 1,
+
+          blastMaxDistance: 1,
+
+          reviewFilePaths: ['src/server.ts'],
+
+          signals: [
+            {
+              kind: 'blast-radius',
+
+              description: 'One dependent file should be reviewed before changing this file.',
+            },
+          ],
+        },
+      ],
+
+      consideredFileCount: 2,
+
+      maxRecommendations: 5,
+    },
   };
 }
 
@@ -550,6 +796,10 @@ async function readPersistedCounts(analysisId: string): Promise<{
   results: number;
 
   onboarding: number;
+
+  goodFirstTasks: number;
+
+  newcomerChangeGuidance: number;
 }> {
   const db = requireDatabase();
 
@@ -609,6 +859,20 @@ async function readPersistedCounts(analysisId: string): Promise<{
     .from(onboardingSteps)
     .where(eq(onboardingSteps.analysisId, analysisId));
 
+  const goodFirstTaskRows = await db
+    .select({
+      recommendationRank: goodFirstTaskRecommendations.recommendationRank,
+    })
+    .from(goodFirstTaskRecommendations)
+    .where(eq(goodFirstTaskRecommendations.analysisId, analysisId));
+
+  const newcomerChangeGuidanceRows = await db
+    .select({
+      recommendationRank: newcomerChangeGuidanceRecommendations.recommendationRank,
+    })
+    .from(newcomerChangeGuidanceRecommendations)
+    .where(eq(newcomerChangeGuidanceRecommendations.analysisId, analysisId));
+
   return {
     files: fileRows.length,
 
@@ -623,6 +887,10 @@ async function readPersistedCounts(analysisId: string): Promise<{
     results: resultRows.length,
 
     onboarding: onboardingRows.length,
+
+    goodFirstTasks: goodFirstTaskRows.length,
+
+    newcomerChangeGuidance: newcomerChangeGuidanceRows.length,
   };
 }
 
@@ -662,11 +930,11 @@ describeDatabase('persistCompletedAnalysis PostgreSQL integration', () => {
 
         persistedFileCount: 2,
 
-        persistedSymbolCount: 2,
+        persistedSymbolCount: 3,
 
-        persistedEdgeCount: 1,
+        persistedEdgeCount: 2,
 
-        persistedFindingCount: 1,
+        persistedFindingCount: 2,
 
         persistedOnboardingStepCount: 2,
 
@@ -692,16 +960,116 @@ describeDatabase('persistCompletedAnalysis PostgreSQL integration', () => {
 
         metrics: 2,
 
-        symbols: 2,
+        symbols: 3,
 
-        edges: 1,
+        edges: 2,
 
-        findings: 1,
+        findings: 2,
 
         results: 1,
 
         onboarding: 2,
+
+        goodFirstTasks: 2,
+
+        newcomerChangeGuidance: 2,
       });
+
+      const persistedGoodFirstTasks = await requireDatabase()
+        .select({
+          recommendationRank: goodFirstTaskRecommendations.recommendationRank,
+
+          score: goodFirstTaskRecommendations.score,
+
+          architectureRiskScore: goodFirstTaskRecommendations.architectureRiskScore,
+        })
+        .from(goodFirstTaskRecommendations)
+        .where(eq(goodFirstTaskRecommendations.analysisId, analysisId));
+
+      expect(
+        [...persistedGoodFirstTasks].sort(
+          (left, right) => left.recommendationRank - right.recommendationRank,
+        ),
+      ).toEqual([
+        {
+          recommendationRank: 1,
+
+          score: 85,
+
+          architectureRiskScore: 25,
+        },
+
+        {
+          recommendationRank: 2,
+
+          score: 70,
+
+          architectureRiskScore: 84,
+        },
+      ]);
+
+      const persistedNewcomerChangeGuidance = await requireDatabase()
+        .select({
+          recommendationRank: newcomerChangeGuidanceRecommendations.recommendationRank,
+
+          safetyScore: newcomerChangeGuidanceRecommendations.safetyScore,
+
+          riskLevel: newcomerChangeGuidanceRecommendations.riskLevel,
+
+          blastRadius: newcomerChangeGuidanceRecommendations.blastRadius,
+
+          blastMaxDistance: newcomerChangeGuidanceRecommendations.blastMaxDistance,
+
+          reviewFilePaths: newcomerChangeGuidanceRecommendations.reviewFilePaths,
+
+          signals: newcomerChangeGuidanceRecommendations.signals,
+        })
+        .from(newcomerChangeGuidanceRecommendations)
+        .where(eq(newcomerChangeGuidanceRecommendations.analysisId, analysisId));
+
+      expect(
+        [...persistedNewcomerChangeGuidance].sort(
+          (left, right) => left.recommendationRank - right.recommendationRank,
+        ),
+      ).toEqual([
+        {
+          recommendationRank: 1,
+
+          safetyScore: 100,
+
+          riskLevel: 'low',
+
+          blastRadius: 0,
+
+          blastMaxDistance: 0,
+
+          reviewFilePaths: [],
+
+          signals: [],
+        },
+
+        {
+          recommendationRank: 2,
+
+          safetyScore: 65,
+
+          riskLevel: 'medium',
+
+          blastRadius: 1,
+
+          blastMaxDistance: 1,
+
+          reviewFilePaths: ['src/server.ts'],
+
+          signals: [
+            {
+              kind: 'blast-radius',
+
+              description: 'One dependent file should be reviewed before changing this file.',
+            },
+          ],
+        },
+      ]);
 
       /*
        * Prove the read model can reconstruct what
@@ -719,6 +1087,120 @@ describeDatabase('persistCompletedAnalysis PostgreSQL integration', () => {
         'src/server.ts',
         'src/service.ts',
       ]);
+
+      expect(
+        storedById?.files.map((file) => ({
+          filePath: file.path,
+
+          riskScore: file.metrics?.riskScore,
+        })),
+      ).toEqual([
+        {
+          filePath: 'src/server.ts',
+
+          riskScore: 25,
+        },
+
+        {
+          filePath: 'src/service.ts',
+
+          riskScore: 84,
+        },
+      ]);
+
+      expect(storedById?.goodFirstTasks).toEqual({
+        consideredFileCount: 2,
+
+        maxRecommendations: 5,
+
+        recommendations: [
+          {
+            filePath: 'src/server.ts',
+
+            score: 85,
+
+            architectureRiskScore: 25,
+
+            signals: [
+              {
+                kind: 'architecture-risk',
+
+                impact: 'penalty',
+
+                points: 10,
+
+                description: 'Moderate architecture risk reduces first-task suitability.',
+              },
+            ],
+          },
+
+          {
+            filePath: 'src/service.ts',
+
+            score: 70,
+
+            architectureRiskScore: 84,
+
+            signals: [
+              {
+                kind: 'architecture-risk',
+
+                impact: 'penalty',
+
+                points: 20,
+
+                description: 'Higher architecture risk reduces first-task suitability.',
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(storedById?.newcomerChangeGuidance).toEqual({
+        consideredFileCount: 2,
+
+        maxRecommendations: 5,
+
+        recommendations: [
+          {
+            filePath: 'src/server.ts',
+
+            safetyScore: 100,
+
+            riskLevel: 'low',
+
+            blastRadius: 0,
+
+            blastMaxDistance: 0,
+
+            reviewFilePaths: [],
+
+            signals: [],
+          },
+
+          {
+            filePath: 'src/service.ts',
+
+            safetyScore: 65,
+
+            riskLevel: 'medium',
+
+            blastRadius: 1,
+
+            blastMaxDistance: 1,
+
+            reviewFilePaths: ['src/server.ts'],
+
+            signals: [
+              {
+                kind: 'blast-radius',
+
+                description: 'One dependent file should be reviewed before changing this file.',
+              },
+            ],
+          },
+        ],
+      });
 
       expect(
         storedById?.symbols.map((symbol) => ({
@@ -743,11 +1225,61 @@ describeDatabase('persistCompletedAnalysis PostgreSQL integration', () => {
           qualifiedName: 'Service',
           complexity: 3,
         },
+        {
+          filePath: 'src/service.ts',
+          kind: 'function',
+          name: 'runService',
+          qualifiedName: 'runService',
+          complexity: 2,
+        },
       ]);
 
-      expect(storedById?.edges).toHaveLength(1);
+      expect(storedById?.edges).toHaveLength(2);
 
-      expect(storedById?.findings).toHaveLength(1);
+      const importEdge = storedById?.edges.find((edge) => edge.type === 'import');
+
+      expect(importEdge).toEqual(
+        expect.objectContaining({
+          sourcePath: 'src/server.ts',
+
+          targetPath: 'src/service.ts',
+
+          fromSymbolId: null,
+
+          toSymbolId: null,
+
+          weight: 1,
+        }),
+      );
+
+      const callEdge = storedById?.edges.find((edge) => edge.type === 'call');
+
+      expect(callEdge).toEqual(
+        expect.objectContaining({
+          sourcePath: 'src/server.ts',
+
+          targetPath: 'src/service.ts',
+
+          fromSymbolId: expect.any(String),
+
+          toSymbolId: expect.any(String),
+
+          weight: 1,
+
+          isDynamic: false,
+        }),
+      );
+
+      expect(storedById?.findings).toHaveLength(2);
+
+      expect(
+        storedById?.findings.some(
+          (finding) =>
+            finding.kind === 'god-file-risk' &&
+            finding.severity === 'medium' &&
+            finding.filePaths.includes('src/service.ts'),
+        ),
+      ).toBe(true);
 
       expect(storedById?.onboarding.steps).toHaveLength(2);
 
@@ -760,7 +1292,7 @@ describeDatabase('persistCompletedAnalysis PostgreSQL integration', () => {
 
       expect(storedBySourceRevision?.analysis.id).toBe(analysisId);
 
-      expect(storedBySourceRevision?.symbols).toHaveLength(2);
+      expect(storedBySourceRevision?.symbols).toHaveLength(3);
     } finally {
       await deleteTestRepository(repositoryId);
     }
@@ -876,6 +1408,10 @@ describeDatabase('persistCompletedAnalysis PostgreSQL integration', () => {
         results: 0,
 
         onboarding: 0,
+
+        goodFirstTasks: 0,
+
+        newcomerChangeGuidance: 0,
       });
     } finally {
       await deleteTestRepository(repositoryId);

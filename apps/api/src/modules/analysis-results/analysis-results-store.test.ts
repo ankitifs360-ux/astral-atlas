@@ -643,6 +643,149 @@ describe('AnalysisResultsStore', () => {
     });
   });
 
+  describe('getNewcomerChangeGuidance', () => {
+    it('returns newcomer change guidance in deterministic recommendation order', async () => {
+      const resultRow = {
+        consideredFileCount: 2,
+
+        maxRecommendations: 5,
+      };
+
+      /*
+       * Intentionally return rank 2 before rank 1.
+       *
+       * The API store must normalize recommendation ordering.
+       */
+      const recommendationRows = [
+        {
+          recommendationRank: 2,
+
+          filePath: 'src/service.ts',
+
+          safetyScore: 65,
+
+          riskLevel: 'medium',
+
+          blastRadius: 1,
+
+          blastMaxDistance: 1,
+
+          reviewFilePaths: ['src/server.ts'],
+
+          signals: [
+            {
+              kind: 'blast-radius' as const,
+
+              description: 'One dependent file should be reviewed before changing this file.',
+            },
+          ],
+        },
+
+        {
+          recommendationRank: 1,
+
+          filePath: 'src/server.ts',
+
+          safetyScore: 100,
+
+          riskLevel: 'low',
+
+          blastRadius: 0,
+
+          blastMaxDistance: 0,
+
+          reviewFilePaths: [],
+
+          signals: [],
+        },
+      ];
+
+      const { database, selectSpy } = createFakeDatabase([
+        [{ id: ANALYSIS_ID }],
+
+        [resultRow],
+
+        recommendationRows,
+      ]);
+
+      const store = new AnalysisResultsStore(database);
+
+      const guidance = await store.getNewcomerChangeGuidance(ANALYSIS_ID);
+
+      expect(selectSpy).toHaveBeenCalledTimes(3);
+
+      expect(guidance).toEqual({
+        analysisId: ANALYSIS_ID,
+
+        consideredFileCount: 2,
+
+        maxRecommendations: 5,
+
+        recommendations: [
+          {
+            filePath: 'src/server.ts',
+
+            safetyScore: 100,
+
+            riskLevel: 'low',
+
+            blastRadius: 0,
+
+            blastMaxDistance: 0,
+
+            reviewFilePaths: [],
+
+            signals: [],
+          },
+
+          {
+            filePath: 'src/service.ts',
+
+            safetyScore: 65,
+
+            riskLevel: 'medium',
+
+            blastRadius: 1,
+
+            blastMaxDistance: 1,
+
+            reviewFilePaths: ['src/server.ts'],
+
+            signals: [
+              {
+                kind: 'blast-radius',
+
+                description: 'One dependent file should be reviewed before changing this file.',
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    it('returns null when the analysis is not completed', async () => {
+      const { database, selectSpy } = createFakeDatabase([[]]);
+
+      const store = new AnalysisResultsStore(database);
+
+      await expect(store.getNewcomerChangeGuidance(ANALYSIS_ID)).resolves.toBeNull();
+
+      expect(selectSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a completed analysis whose result metadata is missing', async () => {
+      const { database, selectSpy } = createFakeDatabase([[{ id: ANALYSIS_ID }], []]);
+
+      const store = new AnalysisResultsStore(database);
+
+      await expect(store.getNewcomerChangeGuidance(ANALYSIS_ID)).rejects.toThrow(
+        `Completed analysis "${ANALYSIS_ID}" is missing its analysis result`,
+      );
+
+      expect(selectSpy).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('rejects empty identifiers before querying PostgreSQL', async () => {
     const { database, selectSpy } = createFakeDatabase([]);
 

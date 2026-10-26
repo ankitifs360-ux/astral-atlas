@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { assignCallOwners } from './call-owner-resolver.js';
+
 import { parseSource } from './parser.js';
 
 describe('parseSource', () => {
@@ -296,6 +298,73 @@ def get_user(user_id):
     expect(result.functions.map((item) => item.name)).toEqual(['get_user']);
 
     expect(result.classes).toEqual([]);
+  });
+
+  it('connects real parsed calls to their nearest enclosing functions', () => {
+    const result = parseSource({
+      filePath: 'src/calls.ts',
+
+      language: 'typescript',
+
+      source: `
+console.log('boot');
+
+function outer() {
+  prepare();
+
+  function inner() {
+    saveUser();
+  }
+
+  finish();
+}
+          `,
+    });
+
+    expect(result.hasSyntaxErrors).toBe(false);
+
+    expect(result.functions.map((item) => item.name)).toEqual(['outer', 'inner']);
+
+    expect(result.calls.map((item) => item.callee)).toEqual([
+      'console.log',
+      'prepare',
+      'saveUser',
+      'finish',
+    ]);
+
+    const ownedCalls = assignCallOwners(result.calls, result.functions);
+
+    expect(
+      ownedCalls.map((item) => ({
+        callee: item.call.callee,
+
+        owner: item.owner?.name ?? null,
+      })),
+    ).toEqual([
+      {
+        callee: 'console.log',
+
+        owner: null,
+      },
+
+      {
+        callee: 'prepare',
+
+        owner: 'outer',
+      },
+
+      {
+        callee: 'saveUser',
+
+        owner: 'inner',
+      },
+
+      {
+        callee: 'finish',
+
+        owner: 'outer',
+      },
+    ]);
   });
 
   it('detects JavaScript syntax errors', () => {

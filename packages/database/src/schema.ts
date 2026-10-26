@@ -32,6 +32,7 @@ export const analysisFindingKindEnum = pgEnum('analysis_finding_kind', [
   'high-fan-in',
   'high-fan-out',
   'hotspot',
+  'god-file-risk',
 ]);
 
 export const analysisFindingSeverityEnum = pgEnum('analysis_finding_severity', [
@@ -690,6 +691,38 @@ export const analysisResults = pgTable(
 
     onboardingMaxSteps: integer('onboarding_max_steps').notNull(),
 
+    /*
+     * B15.5 smart good-first-task recommendation metadata.
+     *
+     * Defaults preserve compatibility with analyses that
+     * were persisted before B15.5 existed.
+     */
+    goodFirstTaskConsideredFileCount: integer('good_first_task_considered_file_count')
+      .default(0)
+      .notNull(),
+
+    goodFirstTaskMaxRecommendations: integer('good_first_task_max_recommendations')
+      .default(5)
+      .notNull(),
+
+    /*
+     * B15.6 blast-radius-aware newcomer change guidance metadata.
+     *
+     * Defaults preserve compatibility with analyses persisted
+     * before B15.6 existed.
+     */
+    newcomerChangeGuidanceConsideredFileCount: integer(
+      'newcomer_change_guidance_considered_file_count',
+    )
+      .default(0)
+      .notNull(),
+
+    newcomerChangeGuidanceMaxRecommendations: integer(
+      'newcomer_change_guidance_max_recommendations',
+    )
+      .default(5)
+      .notNull(),
+
     createdAt: timestamp('created_at', {
       withTimezone: true,
     })
@@ -726,6 +759,34 @@ export const analysisResults = pgTable(
       'analysis_results_onboarding_max_steps_positive',
       sql`
           ${table.onboardingMaxSteps} >= 1
+        `,
+    ),
+
+    check(
+      'analysis_results_good_first_task_considered_nonnegative',
+      sql`
+          ${table.goodFirstTaskConsideredFileCount} >= 0
+        `,
+    ),
+
+    check(
+      'analysis_results_good_first_task_max_positive',
+      sql`
+          ${table.goodFirstTaskMaxRecommendations} >= 1
+        `,
+    ),
+
+    check(
+      'analysis_results_newcomer_change_guidance_considered_nonnegative',
+      sql`
+          ${table.newcomerChangeGuidanceConsideredFileCount} >= 0
+        `,
+    ),
+
+    check(
+      'analysis_results_newcomer_change_guidance_max_positive',
+      sql`
+          ${table.newcomerChangeGuidanceMaxRecommendations} >= 1
         `,
     ),
   ],
@@ -886,6 +947,208 @@ export const onboardingSteps = pgTable(
       'onboarding_steps_score_nonnegative',
       sql`
           ${table.score} >= 0
+        `,
+    ),
+  ],
+);
+
+/*
+ * ---------------------------------------------------------------------------
+ * B15.5 Smart good-first-task recommendations
+ * ---------------------------------------------------------------------------
+ */
+
+export const goodFirstTaskRecommendations = pgTable(
+  'good_first_task_recommendations',
+  {
+    analysisId: uuid('analysis_id')
+      .notNull()
+      .references(() => analyses.id, {
+        onDelete: 'cascade',
+      }),
+
+    /*
+     * 1-based recommendation order.
+     */
+    recommendationRank: integer('recommendation_rank').notNull(),
+
+    fileId: uuid('file_id')
+      .notNull()
+      .references(() => files.id, {
+        onDelete: 'cascade',
+      }),
+
+    /*
+     * Normalized beginner-suitability score.
+     */
+    score: integer('score').notNull(),
+
+    /*
+     * Snapshot of the B15.4 architecture risk score
+     * used when this recommendation was calculated.
+     */
+    architectureRiskScore: integer('architecture_risk_score').notNull(),
+
+    /*
+     * GoodFirstTaskSignal[].
+     */
+    signals: jsonb('signals').notNull(),
+
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'good_first_task_recommendations_pk',
+
+      columns: [table.analysisId, table.recommendationRank],
+    }),
+
+    unique('good_first_task_recommendations_analysis_file_unique').on(
+      table.analysisId,
+      table.fileId,
+    ),
+
+    index('good_first_task_recommendations_file_idx').on(table.fileId),
+
+    check(
+      'good_first_task_recommendations_rank_positive',
+      sql`
+          ${table.recommendationRank} >= 1
+        `,
+    ),
+
+    check(
+      'good_first_task_recommendations_score_range',
+      sql`
+          ${table.score} >= 0
+          AND ${table.score} <= 100
+        `,
+    ),
+
+    check(
+      'good_first_task_recommendations_risk_score_range',
+      sql`
+          ${table.architectureRiskScore} >= 0
+          AND ${table.architectureRiskScore} <= 100
+        `,
+    ),
+  ],
+);
+
+/*
+ * ---------------------------------------------------------------------------
+ * B15.6 Blast-radius-aware newcomer change guidance
+ * ---------------------------------------------------------------------------
+ */
+
+export const newcomerChangeGuidanceRecommendations = pgTable(
+  'newcomer_change_guidance_recommendations',
+  {
+    analysisId: uuid('analysis_id')
+      .notNull()
+      .references(() => analyses.id, {
+        onDelete: 'cascade',
+      }),
+
+    /*
+     * 1-based recommendation order.
+     */
+    recommendationRank: integer('recommendation_rank').notNull(),
+
+    fileId: uuid('file_id')
+      .notNull()
+      .references(() => files.id, {
+        onDelete: 'cascade',
+      }),
+
+    /*
+     * Normalized newcomer change-safety score.
+     */
+    safetyScore: integer('safety_score').notNull(),
+
+    /*
+     * low | medium | high
+     */
+    riskLevel: varchar('risk_level', {
+      length: 16,
+    }).notNull(),
+
+    /*
+     * Snapshot of blast-radius metrics used when
+     * this guidance was calculated.
+     */
+    blastRadius: integer('blast_radius').notNull(),
+
+    blastMaxDistance: integer('blast_max_distance').notNull(),
+
+    /*
+     * Ordered repository-relative file paths that a
+     * newcomer should inspect before changing this file.
+     */
+    reviewFilePaths: jsonb('review_file_paths').notNull(),
+
+    /*
+     * NewcomerChangeGuidanceSignal[].
+     */
+    signals: jsonb('signals').notNull(),
+
+    createdAt: timestamp('created_at', {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'newcomer_change_guidance_recommendations_pk',
+
+      columns: [table.analysisId, table.recommendationRank],
+    }),
+
+    unique('newcomer_change_guidance_recommendations_analysis_file_unique').on(
+      table.analysisId,
+      table.fileId,
+    ),
+
+    index('newcomer_change_guidance_recommendations_file_idx').on(table.fileId),
+
+    check(
+      'newcomer_change_guidance_recommendations_rank_positive',
+      sql`
+          ${table.recommendationRank} >= 1
+        `,
+    ),
+
+    check(
+      'newcomer_change_guidance_recommendations_safety_score_range',
+      sql`
+          ${table.safetyScore} >= 0
+          AND ${table.safetyScore} <= 100
+        `,
+    ),
+
+    check(
+      'newcomer_change_guidance_recommendations_risk_level_valid',
+      sql`
+          ${table.riskLevel} IN ('low', 'medium', 'high')
+        `,
+    ),
+
+    check(
+      'newcomer_change_guidance_recommendations_blast_radius_nonnegative',
+      sql`
+          ${table.blastRadius} >= 0
+        `,
+    ),
+
+    check(
+      'newcomer_change_guidance_recommendations_blast_distance_nonnegative',
+      sql`
+          ${table.blastMaxDistance} >= 0
         `,
     ),
   ],

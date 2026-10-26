@@ -1,167 +1,145 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { ParserThreadPool } from './parser-thread-pool.js';
+import { ParserThreadClient } from './parser-thread-client.js';
 
-describe('ParserThreadPool integration', () => {
-  let pool: ParserThreadPool;
+describe('ParserThreadClient integration', () => {
+  let client: ParserThreadClient;
 
   beforeAll(() => {
     /*
-     * Use exactly two real worker_threads.
+     * This creates a REAL Node worker_thread.
      *
-     * This proves that the pool can distribute
-     * parsing work across multiple long-lived
-     * Tree-sitter threads.
+     * No mocks are used in this file.
      */
-    pool = new ParserThreadPool(2);
+    client = new ParserThreadClient();
   });
 
   afterAll(async () => {
-    await pool.close();
+    await client.close();
   });
 
-  it('parses multiple languages through real worker threads', async () => {
-    const results = await pool.parseMany([
-      {
-        filePath: 'src/app.ts',
+  it('parses TypeScript inside a real worker thread', async () => {
+    const result = await client.parse({
+      filePath: 'src/user-service.ts',
 
-        language: 'typescript',
+      language: 'typescript',
 
-        source: `
-                import {
-                  UserService,
-                } from './user-service.js';
+      source: `
+              import type {
+                User,
+              } from './types.js';
 
-                class Application {
-                  start() {
-                    return new UserService();
-                  }
+              import {
+                database,
+              } from './database.js';
+
+              class UserService {
+                async findUser(
+                  id: string,
+                ): Promise<User> {
+                  return database.find(id);
                 }
-              `,
+              }
+
+              function createService() {
+                return new UserService();
+              }
+            `,
+    });
+
+    expect(result.filePath).toBe('src/user-service.ts');
+
+    expect(result.language).toBe('typescript');
+
+    expect(result.hasSyntaxErrors).toBe(false);
+
+    expect(result.imports.map((item) => item.source)).toEqual(['./types.js', './database.js']);
+
+    expect(result.classes.map((item) => item.name)).toEqual(['UserService']);
+
+    expect(
+      result.functions.map((item) => ({
+        name: item.name,
+
+        async: item.async,
+      })),
+    ).toEqual([
+      {
+        name: 'findUser',
+
+        async: true,
       },
 
       {
-        filePath: 'src/service.py',
+        name: 'createService',
 
-        language: 'python',
+        async: false,
+      },
+    ]);
 
-        source: `
+    expect(result.calls.map((item) => item.callee)).toEqual(['database.find']);
+  }, 15_000);
+
+  it('reuses the same real worker thread for Python parsing', async () => {
+    const result = await client.parse({
+      filePath: 'src/service.py',
+
+      language: 'python',
+
+      source: `
 from database.client import database
 
 class UserService:
     async def find_user(self, user_id):
         return database.find(user_id)
-              `,
+
+def create_service():
+    return UserService()
+            `,
+    });
+
+    expect(result.hasSyntaxErrors).toBe(false);
+
+    expect(result.imports.map((item) => item.source)).toEqual(['database.client']);
+
+    expect(result.classes.map((item) => item.name)).toEqual(['UserService']);
+
+    expect(
+      result.functions.map((item) => ({
+        name: item.name,
+
+        async: item.async,
+      })),
+    ).toEqual([
+      {
+        name: 'find_user',
+
+        async: true,
       },
 
       {
-        filePath: 'src/index.js',
+        name: 'create_service',
 
-        language: 'javascript',
-
-        source: `
-                import express from 'express';
-
-                function startServer() {
-                  return express();
-                }
-              `,
+        async: false,
       },
     ]);
 
-    expect(results).toHaveLength(3);
+    expect(result.calls.map((item) => item.callee)).toEqual(['database.find', 'UserService']);
+  }, 15_000);
 
-    /*
-     * parseMany() must preserve input order
-     * even if worker threads finish in a
-     * different order.
-     */
-    expect(results.map((result) => result.filePath)).toEqual([
-      'src/app.ts',
-      'src/service.py',
-      'src/index.js',
-    ]);
-
-    expect(results[0]).toMatchObject({
-      filePath: 'src/app.ts',
-
-      language: 'typescript',
-
-      hasSyntaxErrors: false,
-    });
-
-    expect(results[0]?.imports.map((item) => item.source)).toEqual(['./user-service.js']);
-
-    expect(results[0]?.classes.map((item) => item.name)).toEqual(['Application']);
-
-    expect(results[1]).toMatchObject({
-      filePath: 'src/service.py',
-
-      language: 'python',
-
-      hasSyntaxErrors: false,
-    });
-
-    expect(results[1]?.imports.map((item) => item.source)).toEqual(['database.client']);
-
-    expect(results[1]?.classes.map((item) => item.name)).toEqual(['UserService']);
-
-    expect(results[2]).toMatchObject({
-      filePath: 'src/index.js',
+  it('returns syntax-error information across the thread boundary', async () => {
+    const result = await client.parse({
+      filePath: 'src/broken.js',
 
       language: 'javascript',
 
-      hasSyntaxErrors: false,
+      source: `
+              function broken( {
+                return 42;
+              }
+            `,
     });
 
-    expect(results[2]?.imports.map((item) => item.source)).toEqual(['express']);
-
-    expect(results[2]?.functions.map((item) => item.name)).toEqual(['startServer']);
-  }, 20_000);
-
-  it('keeps the pool usable across multiple batches', async () => {
-    const firstBatch = await pool.parseMany([
-      {
-        filePath: 'src/first.ts',
-
-        language: 'typescript',
-
-        source: 'function first() {}',
-      },
-
-      {
-        filePath: 'src/second.ts',
-
-        language: 'typescript',
-
-        source: 'function second() {}',
-      },
-    ]);
-
-    expect(firstBatch.map((result) => result.filePath)).toEqual(['src/first.ts', 'src/second.ts']);
-
-    /*
-     * The same two worker_threads should
-     * remain alive and accept another batch.
-     */
-    const secondBatch = await pool.parseMany([
-      {
-        filePath: 'src/third.py',
-
-        language: 'python',
-
-        source: 'def third():\n    return 3',
-      },
-
-      {
-        filePath: 'src/fourth.js',
-
-        language: 'javascript',
-
-        source: 'function fourth() { return 4; }',
-      },
-    ]);
-
-    expect(secondBatch.map((result) => result.filePath)).toEqual(['src/third.py', 'src/fourth.js']);
-  }, 20_000);
+    expect(result.hasSyntaxErrors).toBe(true);
+  }, 15_000);
 });

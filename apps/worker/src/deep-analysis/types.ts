@@ -6,7 +6,8 @@ export type AnalysisFindingKind =
   | 'large-blast-radius'
   | 'high-fan-in'
   | 'high-fan-out'
-  | 'hotspot';
+  | 'hotspot'
+  | 'god-file-risk';
 
 export type AnalysisFindingSeverity = 'low' | 'medium' | 'high';
 

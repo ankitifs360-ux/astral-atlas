@@ -3,14 +3,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
+import { calculateFileArchitectureRiskScores } from '../src/deep-analysis/architecture-risk-score.js';
 import { analyzeRepositoryDeeply } from '../src/deep-analysis/repository-deep-analysis.js';
 import { buildRepositoryGraph } from '../src/graph/repository-graph.js';
 import { calculateRepositoryHealthScore } from '../src/health-score/repository-health-score.js';
 import { calculateRepositoryMetrics } from '../src/metrics/repository-metrics.js';
+import { scoreGoodFirstTasks } from '../src/onboarding/good-first-task-scorer.js';
+import { scoreNewcomerChangeGuidance } from '../src/onboarding/newcomer-change-guidance-scorer.js';
 import { buildRepositoryOnboardingPath } from '../src/onboarding/repository-onboarding.js';
 import { ParserThreadPool } from '../src/parsing/parser-thread-pool.js';
 import { parseRepositoryFiles } from '../src/parsing/repository-parser.js';
 import { scanRepositorySourceFiles } from '../src/parsing/repository-source-files.js';
+import { resolveRepositoryFunctionCalls } from '../src/resolution/repository-function-call-resolver.js';
 
 const DEFAULT_FILE_COUNT = 500;
 const DEFAULT_MEASURED_ROUNDS = 3;
@@ -21,10 +25,14 @@ interface PhaseTimings {
   parseMs: number;
   sourceLoadMs: number;
   graphMs: number;
+  functionCallResolutionMs: number;
   metricsMs: number;
   deepAnalysisMs: number;
+  architectureRiskMs: number;
   healthScoreMs: number;
   onboardingMs: number;
+  goodFirstTaskMs: number;
+  newcomerChangeGuidanceMs: number;
   parserCloseMs: number;
   totalMs: number;
 }
@@ -33,8 +41,12 @@ interface BenchmarkRoundResult {
   timings: PhaseTimings;
   analyzedFileCount: number;
   edgeCount: number;
+  resolvedCallCount: number;
   findingCount: number;
+  architectureRiskScoreCount: number;
   onboardingStepCount: number;
+  goodFirstTaskCount: number;
+  newcomerChangeGuidanceCount: number;
   healthScore: number;
   throughputFilesPerSecond: number;
   rssBeforeBytes: number;
@@ -261,6 +273,12 @@ async function runAnalysisRound(repositoryRoot: string): Promise<BenchmarkRoundR
 
     peakObservedRssBytes = observeRss(peakObservedRssBytes);
 
+    const functionCallResolutionResult = measureSync(() =>
+      resolveRepositoryFunctionCalls(parseResult.value.parsed),
+    );
+
+    peakObservedRssBytes = observeRss(peakObservedRssBytes);
+
     const metricsResult = measureSync(() =>
       calculateRepositoryMetrics({
         graphAnalysis: graphResult.value,
@@ -277,6 +295,15 @@ async function runAnalysisRound(repositoryRoot: string): Promise<BenchmarkRoundR
 
         graphAnalysis: graphResult.value,
       }),
+    );
+
+    peakObservedRssBytes = observeRss(peakObservedRssBytes);
+
+    const architectureRiskResult = measureSync(() =>
+      calculateFileArchitectureRiskScores(
+        metricsResult.value.files.map((file) => file.filePath),
+        deepAnalysisResult.value.findings,
+      ),
     );
 
     peakObservedRssBytes = observeRss(peakObservedRssBytes);
@@ -303,6 +330,25 @@ async function runAnalysisRound(repositoryRoot: string): Promise<BenchmarkRoundR
 
     peakObservedRssBytes = observeRss(peakObservedRssBytes);
 
+    const goodFirstTaskResult = measureSync(() =>
+      scoreGoodFirstTasks({
+        metrics: metricsResult.value,
+        architectureRiskScores: architectureRiskResult.value,
+      }),
+    );
+
+    peakObservedRssBytes = observeRss(peakObservedRssBytes);
+
+    const newcomerChangeGuidanceResult = measureSync(() =>
+      scoreNewcomerChangeGuidance({
+        metrics: metricsResult.value,
+        graph: graphResult.value.graph,
+        architectureRiskScores: architectureRiskResult.value,
+      }),
+    );
+
+    peakObservedRssBytes = observeRss(peakObservedRssBytes);
+
     const parserCloseResult = await measureAsync(async () => {
       await pool.close();
     });
@@ -321,10 +367,14 @@ async function runAnalysisRound(repositoryRoot: string): Promise<BenchmarkRoundR
         parseMs: parseResult.durationMs,
         sourceLoadMs: sourceLoadResult.durationMs,
         graphMs: graphResult.durationMs,
+        functionCallResolutionMs: functionCallResolutionResult.durationMs,
         metricsMs: metricsResult.durationMs,
         deepAnalysisMs: deepAnalysisResult.durationMs,
+        architectureRiskMs: architectureRiskResult.durationMs,
         healthScoreMs: healthScoreResult.durationMs,
         onboardingMs: onboardingResult.durationMs,
+        goodFirstTaskMs: goodFirstTaskResult.durationMs,
+        newcomerChangeGuidanceMs: newcomerChangeGuidanceResult.durationMs,
         parserCloseMs,
         totalMs,
       },
@@ -333,9 +383,17 @@ async function runAnalysisRound(repositoryRoot: string): Promise<BenchmarkRoundR
 
       edgeCount: graphResult.value.graph.edges.length,
 
+      resolvedCallCount: functionCallResolutionResult.value.calls.length,
+
       findingCount: deepAnalysisResult.value.findings.length,
 
+      architectureRiskScoreCount: architectureRiskResult.value.length,
+
       onboardingStepCount: onboardingResult.value.steps.length,
+
+      goodFirstTaskCount: goodFirstTaskResult.value.recommendations.length,
+
+      newcomerChangeGuidanceCount: newcomerChangeGuidanceResult.value.recommendations.length,
 
       healthScore: healthScoreResult.value.score,
 
@@ -451,6 +509,10 @@ function printPhaseSummary(results: readonly BenchmarkRoundResult[]): void {
       select: (result) => result.timings.graphMs,
     },
     {
+      label: 'function calls',
+      select: (result) => result.timings.functionCallResolutionMs,
+    },
+    {
       label: 'metrics',
       select: (result) => result.timings.metricsMs,
     },
@@ -459,12 +521,24 @@ function printPhaseSummary(results: readonly BenchmarkRoundResult[]): void {
       select: (result) => result.timings.deepAnalysisMs,
     },
     {
+      label: 'architecture risk',
+      select: (result) => result.timings.architectureRiskMs,
+    },
+    {
       label: 'health score',
       select: (result) => result.timings.healthScoreMs,
     },
     {
       label: 'onboarding',
       select: (result) => result.timings.onboardingMs,
+    },
+    {
+      label: 'good first task',
+      select: (result) => result.timings.goodFirstTaskMs,
+    },
+    {
+      label: 'newcomer guidance',
+      select: (result) => result.timings.newcomerChangeGuidanceMs,
     },
     {
       label: 'parser close',
@@ -506,9 +580,17 @@ function printSummary(results: readonly BenchmarkRoundResult[]): void {
 
   console.log(`  graph edges          ${representativeResult.edgeCount}`);
 
+  console.log(`  resolved calls       ${representativeResult.resolvedCallCount}`);
+
   console.log(`  findings             ${representativeResult.findingCount}`);
 
+  console.log(`  architecture risks   ${representativeResult.architectureRiskScoreCount}`);
+
   console.log(`  onboarding steps     ${representativeResult.onboardingStepCount}`);
+
+  console.log(`  good first tasks     ${representativeResult.goodFirstTaskCount}`);
+
+  console.log(`  newcomer guidance    ${representativeResult.newcomerChangeGuidanceCount}`);
 
   console.log(`  health score         ${representativeResult.healthScore}`);
 
@@ -549,7 +631,7 @@ async function main(): Promise<void> {
   console.log(`Rounds: ${measuredRounds} measured + ${warmupRounds} warmup`);
 
   console.log(
-    'Pipeline: scan -> Tree-sitter parse -> graph -> metrics -> deep analysis -> health -> onboarding',
+    'Pipeline: scan -> Tree-sitter parse -> graph -> function calls -> metrics -> deep analysis -> architecture risk -> health -> onboarding -> good-first-task -> newcomer guidance',
   );
 
   const repositoryRoot = await createBenchmarkRepository(fileCount);

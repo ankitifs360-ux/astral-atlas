@@ -27,6 +27,109 @@ describe('import extraction', () => {
     ]);
   });
 
+  it('extracts default ESM import bindings', () => {
+    const result = parseSource({
+      filePath: 'src/app.ts',
+
+      language: 'typescript',
+
+      source: `
+        import UserService from './user-service.js';
+      `,
+    });
+
+    expect(result.imports).toHaveLength(1);
+
+    expect(result.imports[0]?.bindings).toEqual([
+      {
+        kind: 'default',
+        importedName: null,
+        localName: 'UserService',
+      },
+    ]);
+  });
+
+  it('extracts named and aliased ESM import bindings', () => {
+    const result = parseSource({
+      filePath: 'src/app.ts',
+
+      language: 'typescript',
+
+      source: `
+        import {
+          saveUser,
+          findUser as lookupUser,
+        } from './users.js';
+      `,
+    });
+
+    expect(result.imports).toHaveLength(1);
+
+    expect(result.imports[0]?.bindings).toEqual([
+      {
+        kind: 'named',
+        importedName: 'saveUser',
+        localName: 'saveUser',
+      },
+      {
+        kind: 'named',
+        importedName: 'findUser',
+        localName: 'lookupUser',
+      },
+    ]);
+  });
+
+  it('extracts namespace ESM import bindings', () => {
+    const result = parseSource({
+      filePath: 'src/app.ts',
+
+      language: 'typescript',
+
+      source: `
+        import * as users from './users.js';
+      `,
+    });
+
+    expect(result.imports).toHaveLength(1);
+
+    expect(result.imports[0]?.bindings).toEqual([
+      {
+        kind: 'namespace',
+        importedName: null,
+        localName: 'users',
+      },
+    ]);
+  });
+
+  it('extracts combined default and named ESM import bindings', () => {
+    const result = parseSource({
+      filePath: 'src/app.ts',
+
+      language: 'typescript',
+
+      source: `
+        import database, {
+          saveUser,
+        } from './database.js';
+      `,
+    });
+
+    expect(result.imports).toHaveLength(1);
+
+    expect(result.imports[0]?.bindings).toEqual([
+      {
+        kind: 'default',
+        importedName: null,
+        localName: 'database',
+      },
+      {
+        kind: 'named',
+        importedName: 'saveUser',
+        localName: 'saveUser',
+      },
+    ]);
+  });
+
   it('extracts JavaScript and TypeScript re-export dependencies', () => {
     const result = parseSource({
       filePath: 'src/index.ts',

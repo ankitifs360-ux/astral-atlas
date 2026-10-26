@@ -77,6 +77,40 @@ function validateMetricFilesExist(
   }
 }
 
+function createArchitectureRiskScoreIndex(
+  input: PersistCompletedAnalysisInput,
+): Map<string, number> {
+  const riskScoreIndex = new Map<string, number>();
+
+  for (const risk of input.architectureRiskScores ?? []) {
+    if (riskScoreIndex.has(risk.filePath)) {
+      throw new Error(`Duplicate architecture risk score for "${risk.filePath}"`);
+    }
+
+    if (!Number.isFinite(risk.riskScore) || risk.riskScore < 0 || risk.riskScore > 100) {
+      throw new Error(`Architecture risk score for "${risk.filePath}" must be between 0 and 100`);
+    }
+
+    riskScoreIndex.set(risk.filePath, risk.riskScore);
+  }
+
+  return riskScoreIndex;
+}
+
+function validateRiskScoreFilesExist(
+  riskScoreIndex: ReadonlyMap<string, number>,
+
+  metricIndex: ReadonlyMap<string, FileMetrics>,
+): void {
+  for (const filePath of riskScoreIndex.keys()) {
+    if (!metricIndex.has(filePath)) {
+      throw new Error(
+        `Architecture risk score references file without persisted metrics "${filePath}"`,
+      );
+    }
+  }
+}
+
 function validateMetricSummary(input: PersistCompletedAnalysisInput): void {
   if (input.metrics.summary.fileCount !== input.metrics.files.length) {
     throw new Error(
@@ -112,7 +146,11 @@ export async function persistFilesAndMetrics(
 
   const metricIndex = createMetricIndex(input.metrics.files);
 
+  const riskScoreIndex = createArchitectureRiskScoreIndex(input);
+
   validateMetricFilesExist(metricIndex, inputFileIndex);
+
+  validateRiskScoreFilesExist(riskScoreIndex, metricIndex);
 
   validateMetricSummary(input);
 
@@ -226,6 +264,8 @@ export async function persistFilesAndMetrics(
           inDependencyCycle: metric.cycles.inDependencyCycle,
 
           cyclicComponentSize: metric.cycles.cyclicComponentSize,
+
+          riskScore: riskScoreIndex.get(metric.filePath) ?? null,
         })),
     );
   }

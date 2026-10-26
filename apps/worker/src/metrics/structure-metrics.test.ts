@@ -32,6 +32,8 @@ function createParsedFile(
 
     classes: overrides.classes ?? [],
 
+    calls: overrides.calls ?? [],
+
     hasSyntaxErrors: overrides.hasSyntaxErrors ?? false,
   };
 }
